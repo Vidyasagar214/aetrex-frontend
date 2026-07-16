@@ -1,0 +1,21 @@
+@import 'tailwindcss';
+@import './styles/style.css';
+
+@theme {
+  --color-sidebar: #354f5e;
+  --color-sidebar-active: #d9534f;
+  --color-sidebar-nav: #5a7382;
+  --color-page-bg: #f0f2f5;
+  --color-header-bg: #ced4da;
+  --color-card-border: #dee2e6;
+  --color-text-primary: #333333;
+  --color-text-secondary: #666666;
+  --color-chart-teal: #7bc9d7;
+  --color-chart-blue: #1a9dd4;
+  --color-accent: #337ab7;
+  --color-success: #5cb85c;
+  --color-warning: #f0ad4e;
+  --color-danger: #d9534f;
+  --font-sans: 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+}
