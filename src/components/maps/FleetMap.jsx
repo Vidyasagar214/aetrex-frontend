@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   MapContainer,
   TileLayer,
@@ -17,6 +18,7 @@ import MapLegend from './MapLegend';
 
 const DEFAULT_CENTER = [20, 0];
 const DEFAULT_ZOOM = 2;
+const DETAIL_ZOOM = 5;
 const MAX_BOUNDS = [
   [-85, -180],
   [85, 180],
@@ -74,7 +76,7 @@ function FocusMetro({ metro, focusKey }) {
     if (!metro || !Number.isFinite(metro.lat) || !Number.isFinite(metro.lng)) {
       return;
     }
-    map.setView([metro.lat, metro.lng], Math.max(map.getZoom(), 6), {
+    map.setView([metro.lat, metro.lng], Math.max(map.getZoom(), DETAIL_ZOOM), {
       animate: true,
     });
   }, [map, metro, focusKey]);
@@ -91,7 +93,7 @@ function FitSearchBounds({ metros, searchActive }) {
     if (metros.length === 1) {
       const m = metros[0];
       if (Number.isFinite(m.lat) && Number.isFinite(m.lng)) {
-        map.setView([m.lat, m.lng], Math.max(map.getZoom(), 6), {
+        map.setView([m.lat, m.lng], Math.max(map.getZoom(), DETAIL_ZOOM), {
           animate: true,
         });
       }
@@ -124,6 +126,158 @@ function InvalidateOnDrawer({ drawerOpen }) {
   return null;
 }
 
+function explorerDeepLink(metro) {
+  const value = metro.metroKey || metro.city || metro.metro;
+  return `/location-explorer?metro=${encodeURIComponent(value)}`;
+}
+
+/** Overview markers: zoom in on click, then open popup with detail CTA. */
+function OverviewMetroMarker({ metro }) {
+  const map = useMap();
+  const markerRef = useRef(null);
+  const allowPopupRef = useRef(false);
+  const availability = getAvailability(metro);
+  const colors = getBubbleColor(metro.scanners);
+
+  const openDetailPopup = () => {
+    const marker = markerRef.current;
+    if (!marker) return;
+    allowPopupRef.current = true;
+    marker.openPopup?.();
+  };
+
+  const onMarkerClick = () => {
+    const marker = markerRef.current;
+    if (!marker || !Number.isFinite(metro.lat) || !Number.isFinite(metro.lng)) {
+      return;
+    }
+
+    allowPopupRef.current = false;
+    if (typeof marker.closePopup === 'function') {
+      marker.closePopup();
+    }
+
+    const targetZoom = Math.max(map.getZoom(), DETAIL_ZOOM);
+    const alreadyClose =
+      map.getZoom() >= DETAIL_ZOOM - 0.2 &&
+      map.getBounds().contains([metro.lat, metro.lng]) &&
+      map.distance(map.getCenter(), [metro.lat, metro.lng]) < 40000;
+
+    if (alreadyClose) {
+      openDetailPopup();
+      return;
+    }
+
+    map.flyTo([metro.lat, metro.lng], targetZoom, {
+      animate: true,
+      duration: 0.65,
+    });
+
+    map.once('moveend', openDetailPopup);
+    setTimeout(openDetailPopup, 700);
+  };
+
+  return (
+    <CircleMarker
+      ref={markerRef}
+      center={[metro.lat, metro.lng]}
+      radius={6}
+      pathOptions={{
+        fillColor: colors.fill,
+        color: colors.border,
+        weight: 2,
+        opacity: 0.95,
+        fillOpacity: 0.55,
+      }}
+      eventHandlers={{
+        click: onMarkerClick,
+        popupopen: () => {
+          // Block Leaflet's default click→popup until zoom has finished
+          if (!allowPopupRef.current && markerRef.current) {
+            markerRef.current.closePopup();
+          }
+        },
+      }}
+    >
+      <Tooltip className="fleet-map-tooltip" sticky direction="top" opacity={1}>
+        <strong>{metro.metro}</strong>
+        <br />
+        {metro.country}
+        <br />
+        Total Scanners: {metro.scanners.toLocaleString('en-US')}
+        <br />
+        Online Devices: {metro.online.toLocaleString('en-US')}
+        <br />
+        Offline Devices: {metro.offline.toLocaleString('en-US')}
+      </Tooltip>
+      <Popup className="fleet-map-popup" maxWidth={280} autoPan>
+        <div className="map-info-window">
+          <h3 className="map-info-title">{metro.metro}</h3>
+          <p className="map-info-country">{metro.country}</p>
+          <dl className="map-info-stats">
+            <div>
+              <dt>Total Scanners</dt>
+              <dd>{metro.scanners.toLocaleString('en-US')}</dd>
+            </div>
+            <div>
+              <dt>Online</dt>
+              <dd>{metro.online.toLocaleString('en-US')}</dd>
+            </div>
+            <div>
+              <dt>Offline</dt>
+              <dd>{metro.offline.toLocaleString('en-US')}</dd>
+            </div>
+            <div>
+              <dt>Availability</dt>
+              <dd>{availability}%</dd>
+            </div>
+          </dl>
+          <Link to={explorerDeepLink(metro)} className="map-info-detail-btn">
+            See Detailed View
+          </Link>
+        </div>
+      </Popup>
+    </CircleMarker>
+  );
+}
+
+function ExplorerMetroMarker({ metro, onSelect, isDimmed }) {
+  const colors = getBubbleColor(metro.scanners);
+
+  return (
+    <CircleMarker
+      center={[metro.lat, metro.lng]}
+      radius={6}
+      pathOptions={{
+        fillColor: colors.fill,
+        color: colors.border,
+        weight: 2,
+        opacity: isDimmed ? 0.2 : 0.95,
+        fillOpacity: isDimmed ? 0.12 : 0.55,
+      }}
+      eventHandlers={
+        onSelect
+          ? {
+              click: () => onSelect(metro),
+            }
+          : undefined
+      }
+    >
+      <Tooltip className="fleet-map-tooltip" sticky direction="top" opacity={1}>
+        <strong>{metro.metro}</strong>
+        <br />
+        {metro.country}
+        <br />
+        Total Scanners: {metro.scanners.toLocaleString('en-US')}
+        <br />
+        Online Devices: {metro.online.toLocaleString('en-US')}
+        <br />
+        Offline Devices: {metro.offline.toLocaleString('en-US')}
+      </Tooltip>
+    </CircleMarker>
+  );
+}
+
 function MetroMarkers({
   metros,
   mode = 'overview',
@@ -133,69 +287,22 @@ function MetroMarkers({
   return metros.map((metro) => {
     if (!Number.isFinite(metro.lat) || !Number.isFinite(metro.lng)) return null;
 
-    const colors = getBubbleColor(metro.scanners);
-    const availability = getAvailability(metro);
+    const key = metro.metroKey || `${metro.metro}-${metro.lat}-${metro.lng}`;
+
+    if (mode === 'overview') {
+      return <OverviewMetroMarker key={key} metro={metro} />;
+    }
+
     const isDimmed =
       dimmedKeys instanceof Set && !dimmedKeys.has(metro.metroKey);
 
     return (
-      <CircleMarker
-        key={metro.metroKey || `${metro.metro}-${metro.lat}-${metro.lng}`}
-        center={[metro.lat, metro.lng]}
-        radius={6}
-        pathOptions={{
-          fillColor: colors.fill,
-          color: colors.border,
-          weight: 2,
-          opacity: isDimmed ? 0.2 : 0.95,
-          fillOpacity: isDimmed ? 0.12 : 0.55,
-        }}
-        eventHandlers={
-          onSelect
-            ? {
-                click: () => onSelect(metro),
-              }
-            : undefined
-        }
-      >
-        <Tooltip className="fleet-map-tooltip" sticky direction="top" opacity={1}>
-          <strong>{metro.metro}</strong>
-          <br />
-          {metro.country}
-          <br />
-          Total Scanners: {metro.scanners.toLocaleString('en-US')}
-          <br />
-          Online Devices: {metro.online.toLocaleString('en-US')}
-          <br />
-          Offline Devices: {metro.offline.toLocaleString('en-US')}
-        </Tooltip>
-        {mode !== 'explorer' && (
-          <Popup className="fleet-map-popup" maxWidth={280}>
-            <div className="map-info-window">
-              <h3 className="map-info-title">{metro.metro}</h3>
-              <p className="map-info-country">{metro.country}</p>
-              <dl className="map-info-stats">
-                <div>
-                  <dt>Total Scanners</dt>
-                  <dd>{metro.scanners.toLocaleString('en-US')}</dd>
-                </div>
-                <div>
-                  <dt>Online</dt>
-                  <dd>{metro.online.toLocaleString('en-US')}</dd>
-                </div>
-                <div>
-                  <dt>Offline</dt>
-                  <dd>{metro.offline.toLocaleString('en-US')}</dd>
-                </div>
-                <div>
-                  <dt>Availability</dt>
-                  <dd>{availability}%</dd>
-                </div>
-              </dl>
-            </div>
-          </Popup>
-        )}
-      </CircleMarker>
+      <ExplorerMetroMarker
+        key={key}
+        metro={metro}
+        onSelect={onSelect}
+        isDimmed={isDimmed}
+      />
     );
   });
 }
@@ -433,9 +540,14 @@ export function ExplorerMap({
             maxZoom={19}
             noWrap
           />
+          {/* Only fit world before any metro has been focused — closing the
+              drawer must not remount FitWorld and zoom back out. */}
           {!q && !selectedMetro && <FitWorld mode="explorer" />}
           <FocusMetro metro={selectedMetro} focusKey={focusKey} />
-          <FitSearchBounds metros={matchingMetros} searchActive={Boolean(q) && !selectedMetro} />
+          <FitSearchBounds
+            metros={matchingMetros}
+            searchActive={Boolean(q) && !selectedMetro}
+          />
           <InvalidateOnDrawer drawerOpen={drawerOpen} />
           <MetroMarkers
             metros={markersSource}

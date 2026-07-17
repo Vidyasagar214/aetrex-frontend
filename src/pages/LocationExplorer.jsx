@@ -45,27 +45,33 @@ export default function LocationExplorer() {
       setSelectedMetro(metro);
       setDrawerOpen(true);
       if (updateUrl) {
-        setSearchParams({ metro: metro.city || metro.metro }, { replace: true });
+        setSearchParams(
+          { metro: metro.metroKey || metro.city || metro.metro },
+          { replace: true }
+        );
       }
     },
     [setSearchParams]
   );
 
   const closeDrawer = useCallback(() => {
+    // Keep selectedMetro so the map stays zoomed on this location
     setDrawerOpen(false);
     setSearchParams({}, { replace: true });
   }, [setSearchParams]);
 
-  // Deep-link ?metro=
+  // Deep-link ?metro= (from Overview "See Detailed View" or shared URL)
   useEffect(() => {
     const focus = searchParams.get('metro');
     if (!focus || !metros.length) return;
     const needle = focus.toLowerCase();
     const match = metros.find(
       (m) =>
+        m.metroKey === focus ||
+        m.metroKey?.toLowerCase() === needle ||
         m.metro.toLowerCase() === needle ||
         (m.city || '').toLowerCase() === needle ||
-        m.metroKey === needle
+        m.metro.toLowerCase().startsWith(`${needle},`)
     );
     if (match) {
       setSelectedMetro(match);
@@ -118,7 +124,7 @@ export default function LocationExplorer() {
             metros={metros}
             loading={loading}
             error={error}
-            selectedMetro={drawerOpen ? selectedMetro : null}
+            selectedMetro={selectedMetro}
             onSelect={selectMetro}
             searchQuery={search}
             drawerOpen={drawerOpen}

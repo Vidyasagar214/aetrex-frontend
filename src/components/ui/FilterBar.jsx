@@ -1,3 +1,5 @@
+import Select2Field from './Select2Field';
+
 export default function FilterBar({
   searchPlaceholder = 'Search serial, retailer, city…',
   searchValue = '',
@@ -26,23 +28,17 @@ export default function FilterBar({
       {selects.length > 0 ? (
         <div className="filter-selects">
           {selects.map((select) => (
-            <select
+            <Select2Field
               key={select.id}
-              aria-label={select.ariaLabel}
+              id={select.id}
+              ariaLabel={select.ariaLabel}
               value={select.value}
-              onChange={(e) => select.onChange(e.target.value)}
-            >
-              <option value="">{select.allLabel}</option>
-              {select.options.map((opt) => {
-                const value = typeof opt === 'string' ? opt : opt.value;
-                const label = typeof opt === 'string' ? opt : opt.label;
-                return (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                );
-              })}
-            </select>
+              options={select.options || []}
+              allLabel={select.allLabel}
+              placeholder={select.allLabel}
+              onChange={select.onChange}
+              width={select.width || '160px'}
+            />
           ))}
         </div>
       ) : null}
