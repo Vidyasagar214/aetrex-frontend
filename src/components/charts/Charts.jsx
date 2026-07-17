@@ -49,19 +49,27 @@ const baseScale = {
   border: { display: false },
 };
 
-export function VersionChart() {
+export function VersionChart({ labels, values }) {
+  const chartLabels = labels?.length > 0 ? labels : ['—'];
+  const chartValues = values?.length > 0 ? values : [0];
+
+  const palette = [
+    colors.teal,
+    colors.blue,
+    colors.green,
+    colors.orange,
+    colors.danger,
+    colors.gray,
+  ];
+
   const data = {
-    labels: ['v4.5', 'v4.4', 'v4.3', 'v4.2', 'Older'],
+    labels: chartLabels,
     datasets: [
       {
-        data: [3475, 380, 160, 98, 125],
-        backgroundColor: [
-          colors.teal,
-          colors.blue,
-          colors.green,
-          colors.orange,
-          colors.danger,
-        ],
+        data: chartValues,
+        backgroundColor: chartLabels.map(
+          (_, i) => palette[i % palette.length]
+        ),
         borderRadius: 2,
         borderSkipped: false,
         barPercentage: 0.65,
@@ -86,13 +94,29 @@ export function VersionChart() {
   return <Bar data={data} options={options} />;
 }
 
-export function ModelChart() {
+export function ModelChart({ labels, values, percents }) {
+  const chartLabels = labels?.length > 0 ? labels : ['—'];
+  const chartValues = values?.length > 0 ? values : [0];
+  const chartPercents =
+    percents?.length > 0 ? percents : chartValues.map(() => 0);
+
+  const palette = [
+    colors.blue,
+    colors.green,
+    colors.orange,
+    colors.teal,
+    colors.danger,
+    colors.gray,
+  ];
+
   const data = {
-    labels: ['Albert Pro', 'Albert 3DFit', 'Albert Pressure Scanner', 'Zoe Pro'],
+    labels: chartLabels,
     datasets: [
       {
-        data: [38, 25, 13, 24],
-        backgroundColor: [colors.blue, colors.green, colors.orange, colors.teal],
+        data: chartValues,
+        backgroundColor: chartLabels.map(
+          (_, i) => palette[i % palette.length]
+        ),
         borderWidth: 2,
         borderColor: '#FFFFFF',
         hoverOffset: 4,
@@ -119,7 +143,13 @@ export function ModelChart() {
       tooltip: {
         backgroundColor: colors.tooltip,
         callbacks: {
-          label: (ctx) => ` ${ctx.label}: ${ctx.parsed}%`,
+          label: (ctx) => {
+            const pct = chartPercents[ctx.dataIndex];
+            const count = ctx.parsed;
+            const pctText =
+              pct != null ? `${pct}%` : `${count}`;
+            return ` ${ctx.label}: ${count.toLocaleString('en-US')} (${pctText})`;
+          },
         },
       },
     },
@@ -128,23 +158,20 @@ export function ModelChart() {
   return <Doughnut data={data} options={options} />;
 }
 
-export function AdoptionChart() {
-  const labels = [
-    'May 18',
-    'May 25',
-    'Jun 1',
-    'Jun 8',
-    'Jun 15',
-    'Jun 22',
-    'Jun 29',
-    'Jul 6',
-    'Jul 13',
-  ];
-  const adoptionData = [8, 18, 29, 41, 52, 61, 70, 77, 82];
-  const targetData = labels.map(() => 90);
+export function AdoptionChart({
+  labels = [],
+  adoption = [],
+  target = [],
+  targetPct = 90,
+}) {
+  const chartLabels = labels?.length > 0 ? labels : ['—'];
+  const adoptionData =
+    adoption?.length > 0 ? adoption : chartLabels.map(() => 0);
+  const targetData =
+    target?.length > 0 ? target : chartLabels.map(() => targetPct);
 
   const data = {
-    labels,
+    labels: chartLabels,
     datasets: [
       {
         label: 'Adoption %',
@@ -154,23 +181,28 @@ export function AdoptionChart() {
           const chart = context.chart;
           const { ctx, chartArea } = chart;
           if (!chartArea) return 'rgba(26, 157, 212, 0.15)';
-          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-          gradient.addColorStop(0, 'rgba(26, 157, 212, 0.15)');
-          gradient.addColorStop(1, 'rgba(26, 157, 212, 0.01)');
+          const gradient = ctx.createLinearGradient(
+            0,
+            chartArea.top,
+            0,
+            chartArea.bottom
+          );
+          gradient.addColorStop(0, 'rgba(26, 157, 212, 0.25)');
+          gradient.addColorStop(1, 'rgba(26, 157, 212, 0.02)');
           return gradient;
         },
         borderWidth: 2,
         fill: true,
-        tension: 0.35,
+        tension: 0.3,
         pointBackgroundColor: colors.blue,
         pointBorderColor: '#FFFFFF',
         pointBorderWidth: 2,
-        pointRadius: 3,
+        pointRadius: chartLabels.length > 20 ? 2 : 3,
         pointHoverRadius: 5,
         order: 1,
       },
       {
-        label: 'Target %',
+        label: `Target ${targetPct}%`,
         data: targetData,
         borderColor: colors.danger,
         borderWidth: 1.5,
@@ -186,6 +218,7 @@ export function AdoptionChart() {
   const options = {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: {
         display: true,
@@ -199,9 +232,14 @@ export function AdoptionChart() {
         },
       },
       tooltip: {
-        backgroundColor: colors.tooltip,
+        ...tooltipBase,
         callbacks: {
-          label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y}%`,
+          label: (ctx) => {
+            const y = ctx.parsed.y;
+            const value =
+              typeof y === 'number' ? `${y.toFixed(y % 1 === 0 ? 0 : 1)}%` : y;
+            return ` ${ctx.dataset.label}: ${value}`;
+          },
         },
       },
     },
@@ -211,6 +249,9 @@ export function AdoptionChart() {
         ticks: {
           color: colors.tick,
           font: { size: 11, family: "'Segoe UI', sans-serif", weight: '400' },
+          maxRotation: 0,
+          autoSkip: true,
+          maxTicksLimit: 10,
         },
         border: { display: false },
       },

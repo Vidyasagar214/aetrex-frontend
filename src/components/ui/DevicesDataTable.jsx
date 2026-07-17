@@ -2,21 +2,24 @@ import { useEffect, useRef } from 'react';
 import $ from 'jquery';
 import DataTable from 'datatables.net-dt';
 import 'datatables.net-responsive-dt';
+import StatusBadge from './StatusBadge';
 
 if (typeof window !== 'undefined') {
   window.$ = window.jQuery = $;
 }
 
-const STATUS_CLASS = {
-  Active: 'status-online',
-  Idle: 'status-pending',
-  Offline: 'status-offline',
-};
+function matchesFilter(filterValue, rowValue) {
+  if (!filterValue) return true;
+  return (
+    String(rowValue || '').toLowerCase() === String(filterValue).toLowerCase()
+  );
+}
 
 export default function DevicesDataTable({ devices, filters, onFilteredCount }) {
   const tableRef = useRef(null);
   const dtRef = useRef(null);
   const filtersRef = useRef(filters);
+  const drawTimerRef = useRef(null);
   filtersRef.current = filters;
 
   useEffect(() => {
@@ -38,6 +41,7 @@ export default function DevicesDataTable({ devices, filters, onFilteredCount }) 
           row.dataset.city,
           row.dataset.country,
           row.dataset.model,
+          row.dataset.modelCode,
           row.dataset.version,
           row.dataset.status,
         ]
@@ -47,22 +51,26 @@ export default function DevicesDataTable({ devices, filters, onFilteredCount }) 
         if (!haystack.includes(query)) return false;
       }
 
-      return [
-        ['country', 'country'],
-        ['model', 'model'],
-        ['version', 'version'],
-        ['status', 'status'],
-      ].every(([key, attr]) => {
-        const value = f[key];
-        return !value || row.dataset[attr] === value;
-      });
+      if (!matchesFilter(f.country, row.dataset.country)) return false;
+      if (
+        f.model &&
+        !matchesFilter(f.model, row.dataset.model) &&
+        !matchesFilter(f.model, row.dataset.modelCode)
+      ) {
+        return false;
+      }
+      if (!matchesFilter(f.version, row.dataset.version)) return false;
+      if (!matchesFilter(f.status, row.dataset.status)) return false;
+
+      return true;
     };
 
     DataTable.ext.search.push(filterPlugin);
 
     const table = new DataTable(tableRef.current, {
-      pageLength: 10,
-      lengthMenu: [10, 25, 50],
+      pageLength: 25,
+      lengthMenu: [10, 25, 50, 100],
+      deferRender: true,
       responsive: true,
       order: [[5, 'desc']],
       layout: {
@@ -72,11 +80,12 @@ export default function DevicesDataTable({ devices, filters, onFilteredCount }) 
         bottomEnd: 'paging',
       },
       language: {
+        lengthMenu: 'Show _MENU_ entries',
         info: 'Showing _START_ to _END_ of _TOTAL_ scanners',
         infoEmpty: 'No devices match the current filters',
         infoFiltered: '(filtered from _MAX_ total)',
         zeroRecords: 'No devices match the current filters',
-        emptyTable: 'No devices match the current filters',
+        emptyTable: 'No devices available',
         paginate: {
           first: 'First',
           last: 'Last',
@@ -119,6 +128,7 @@ export default function DevicesDataTable({ devices, filters, onFilteredCount }) 
     });
 
     return () => {
+      clearTimeout(drawTimerRef.current);
       DataTable.ext.search = DataTable.ext.search.filter(
         (fn) => fn !== filterPlugin
       );
@@ -128,7 +138,11 @@ export default function DevicesDataTable({ devices, filters, onFilteredCount }) 
   }, [devices, onFilteredCount]);
 
   useEffect(() => {
-    if (dtRef.current) dtRef.current.draw();
+    clearTimeout(drawTimerRef.current);
+    drawTimerRef.current = setTimeout(() => {
+      if (dtRef.current) dtRef.current.draw();
+    }, 150);
+    return () => clearTimeout(drawTimerRef.current);
   }, [filters]);
 
   return (
@@ -153,9 +167,10 @@ export default function DevicesDataTable({ devices, filters, onFilteredCount }) 
         <tbody>
           {devices.map((device) => (
             <tr
-              key={device.serial}
+              key={device.serial || device.storeId}
               data-serial={device.serial}
               data-model={device.model}
+              data-model-code={device.modelCode || ''}
               data-retailer={device.retailer}
               data-country={device.country}
               data-city={device.city}
@@ -167,16 +182,14 @@ export default function DevicesDataTable({ devices, filters, onFilteredCount }) 
               <td>{device.retailer}</td>
               <td>{device.country}</td>
               <td>{device.version}</td>
-              <td data-order={device.lastContactOrder}>{device.lastContact}</td>
-              <td data-order={device.scans30d}>
-                {device.scans30d.toLocaleString('en-US')}
+              <td data-order={device.lastContactOrder || ''}>
+                {device.lastContact}
+              </td>
+              <td data-order={device.scans30d ?? 0}>
+                {Number(device.scans30d || 0).toLocaleString('en-US')}
               </td>
               <td>
-                <span
-                  className={`status-badge ${STATUS_CLASS[device.status] || 'status-inactive'}`}
-                >
-                  {device.status}
-                </span>
+                <StatusBadge status={device.status} />
               </td>
             </tr>
           ))}

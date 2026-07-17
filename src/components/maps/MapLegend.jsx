@@ -4,19 +4,19 @@ export default function MapLegend({ className = '' }) {
       <span className="legend-title">Scanner Count</span>
       <span className="legend-item">
         <span className="legend-swatch legend-green" />
-        0–50
+        1–5
       </span>
       <span className="legend-item">
         <span className="legend-swatch legend-yellow" />
-        51–150
+        6–10
       </span>
       <span className="legend-item">
         <span className="legend-swatch legend-orange" />
-        151–300
+        11–15
       </span>
       <span className="legend-item">
         <span className="legend-swatch legend-red" />
-        300+
+        16+
       </span>
     </div>
   );

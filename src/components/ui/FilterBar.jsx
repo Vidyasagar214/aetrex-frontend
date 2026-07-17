@@ -2,9 +2,10 @@ export default function FilterBar({
   searchPlaceholder = 'Search serial, retailer, city…',
   searchValue = '',
   onSearchChange,
+  onSearchKeyDown,
   selects = [],
   scannersInView,
-  showExport = true,
+  onExport,
 }) {
   return (
     <section className="filter-bar">
@@ -15,6 +16,7 @@ export default function FilterBar({
             type="search"
             value={searchValue}
             onChange={(e) => onSearchChange(e.target.value)}
+            onKeyDown={onSearchKeyDown}
             placeholder={searchPlaceholder}
             autoComplete="off"
           />
@@ -46,8 +48,8 @@ export default function FilterBar({
       ) : null}
 
       <div className="filter-actions">
-        {showExport ? (
-          <button type="button" className="btn-export">
+        {onExport ? (
+          <button type="button" className="btn-export" onClick={onExport}>
             <i className="fa-solid fa-download" />
             Export report
           </button>

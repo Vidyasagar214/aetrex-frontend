@@ -24,8 +24,8 @@ export default function Header({ title, subtitle, onToggleSidebar }) {
           <span className="data-as-of-dot" aria-hidden="true" />
           <span>{dataAsOf}</span>
         </span>
-        <div className="header-avatar" aria-label="User avatar">
-          JS
+        <div className="header-avatar" aria-label="User avatar" title="Aetrex">
+          AE
         </div>
       </div>
     </header>

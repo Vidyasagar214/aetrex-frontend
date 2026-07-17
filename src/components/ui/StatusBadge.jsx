@@ -1,11 +1,7 @@
-const STATUS_CLASS = {
-  Active: 'status-online',
-  Idle: 'status-pending',
-  Offline: 'status-offline',
-  Online: 'status-online',
-};
+import { statusBadgeClass } from '../../lib/fleetData';
 
 export default function StatusBadge({ status }) {
-  const tone = STATUS_CLASS[status] || 'status-inactive';
-  return <span className={`status-badge ${tone}`}>{status}</span>;
+  return (
+    <span className={`status-badge ${statusBadgeClass(status)}`}>{status}</span>
+  );
 }
