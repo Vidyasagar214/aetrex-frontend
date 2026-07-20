@@ -421,7 +421,6 @@ export function findMetroByZip(metros, scannersByMetro, query) {
     .trim()
     .replace(/\s+/g, '')
     .toLowerCase();
-  // Require a real zip-length query before matching (avoids short false positives)
   if (!q || q.length < 4) return null;
 
   for (const metro of metros) {
@@ -432,9 +431,10 @@ export function findMetroByZip(metros, scannersByMetro, query) {
         .toLowerCase();
       if (!zip) return false;
       if (zip === q) return true;
-      if (q.length >= 5 && (zip.startsWith(q) || q.startsWith(zip.slice(0, 5)))) {
-        return true;
-      }
+      // Typed prefix of a longer zip (e.g. 10001 → 10001-1234)
+      if (zip.startsWith(q) && q.length >= 4) return true;
+      // Typed ZIP+4 while store has 5-digit base (only when base is ≥5 chars)
+      if (q.startsWith(zip) && zip.length >= 5) return true;
       return false;
     });
     if (hit) return metro;

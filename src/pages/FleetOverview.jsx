@@ -36,6 +36,39 @@ const DEFAULT_KPIS = [
   { label: 'Failed upgrades', value: '—', meta: 'need intervention', metaTone: 'danger' },
 ];
 
+/**
+ * Dropdowns only show/hide metros. Bubble counts stay the full metro total
+ * so "See Detailed View" matches Location Explorer.
+ */
+function metroVisibleForFilters(metro, scannersByMetro, { country, model, version, status }) {
+  if (country && metro.country !== country) return false;
+  if (!model && !version && !status) return true;
+
+  const scanners = scannersByMetro.get(metro.metroKey) || [];
+  return scanners.some((s) => {
+    if (model) {
+      const code = String(s.deviceModel || '').trim().toUpperCase();
+      if (code !== String(model).trim().toUpperCase()) return false;
+    }
+    if (version) {
+      const ver = String(s.version || '').trim();
+      if (version === 'older') {
+        if (!ver || ver === '—' || ver === 'NULL') return true;
+        const major = Number.parseFloat(ver);
+        if (!Number.isFinite(major) || major >= 4.2) return false;
+      } else if (!ver.startsWith(String(version).replace(/^v/i, ''))) {
+        return false;
+      }
+    }
+    if (status) {
+      if (String(s.status || '').toLowerCase() !== String(status).toLowerCase()) {
+        return false;
+      }
+    }
+    return true;
+  });
+}
+
 export default function FleetOverview() {
   const [country, setCountry] = useState('');
   const [model, setModel] = useState('');
@@ -64,9 +97,22 @@ export default function FleetOverview() {
     [country, model, version, status]
   );
 
-  /** Map bubbles use the same API filters as KPIs so counts stay aligned. */
+  // Same unfiltered fleet as Location Explorer — detail deep-links stay consistent
   const { metros, scannersByMetro, loading: mapLoading, error: mapError } =
-    useFleetData(dropdownParams);
+    useFleetData();
+
+  const fleetMetros = useMemo(
+    () =>
+      metros.filter((m) =>
+        metroVisibleForFilters(m, scannersByMetro, {
+          country,
+          model,
+          version,
+          status,
+        })
+      ),
+    [metros, scannersByMetro, country, model, version, status]
+  );
 
   const {
     search,
@@ -79,7 +125,7 @@ export default function FleetOverview() {
     searching,
     searchError,
   } = usePlaceSearch({
-    metros,
+    metros: fleetMetros,
     scannersByMetro,
   });
 
@@ -131,7 +177,7 @@ export default function FleetOverview() {
   return (
     <main className="flex-1 p-5 lg:p-6 space-y-5">
       <FilterBar
-        searchPlaceholder="Search address, zip, city, state, country, or metro…"
+        searchPlaceholder="Search country,state,city,zip or metro…"
         searchValue={search}
         onSearchChange={onSearchChange}
         onSearchKeyDown={onSearchKeyDown}

@@ -100,7 +100,7 @@ export default function LocationExplorer() {
   return (
     <main className="flex-1 p-5 lg:p-6 space-y-5 flex flex-col">
       <FilterBar
-        searchPlaceholder="Search address, zip, city, state, country, or metro…"
+        searchPlaceholder="Search country,state,city,zip or metro…"
         searchValue={search}
         onSearchChange={onSearchChange}
         onSearchKeyDown={onExplorerSearchKeyDown}
@@ -122,7 +122,7 @@ export default function LocationExplorer() {
             <div>
               <h2 className="cp-card-title">Fleet locations</h2>
               <p className="cp-card-subtitle">
-                Search address, zip, city, state, or country · click a metro for
+              Search country,state,city,zip, or metro… · click a metro for
                 scanners
               </p>
             </div>
