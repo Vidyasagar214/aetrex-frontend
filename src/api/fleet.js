@@ -5,29 +5,24 @@ import {
   normalizeStoreRow,
 } from '../lib/fleetData';
 
-/** GET /api/metros — metro aggregates for map bubbles (lat/lng null; geocode client-side) */
+/** GET /api/metros — legacy aggregates (kept for callers; map uses store-built index) */
 export function fetchMetros(params = {}) {
   return apiGet('/api/metros', params);
 }
 
-/** GET /api/stores — store/scanner rows for explorer drawer */
+/** GET /api/stores — store/scanner rows (source of truth for metro counts) */
 function fetchStores(params = {}) {
   return apiGet('/api/stores', params);
 }
 
 /**
- * Load fleet map data exclusively from Aetrex-backend SQLite APIs
- * (`/api/metros`, `/api/stores`).
+ * Load fleet map + drawer data from Aetrex-backend.
+ * Metro bubbles and drawer KPIs are always derived from the same store rows
+ * so scanner totals stay identical across every map view.
  */
 export async function loadFleetFromApi(params = {}) {
-  const [metroRows, storeRows] = await Promise.all([
-    fetchMetros(params),
-    fetchStores(params),
-  ]);
+  const storeRows = await fetchStores(params);
 
-  if (!Array.isArray(metroRows)) {
-    throw new Error('Invalid /api/metros response');
-  }
   if (!Array.isArray(storeRows)) {
     throw new Error('Invalid /api/stores response');
   }
@@ -35,11 +30,8 @@ export async function loadFleetFromApi(params = {}) {
   const stores = storeRows.map(normalizeStoreRow).filter(Boolean);
   const index = buildFleetIndex(stores);
 
-  // Prefer API metro aggregates (online/offline from Scan activity)
-  const metroSource = metroRows.length > 0 ? metroRows : index.metros;
-
   return {
-    metros: applyQuickCoords(metroSource),
+    metros: applyQuickCoords(index.metros),
     stores,
     scannersByMetro: index.scannersByMetro,
     source: 'api',

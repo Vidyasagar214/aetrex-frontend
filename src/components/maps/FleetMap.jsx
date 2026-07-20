@@ -8,17 +8,18 @@ import {
   Popup,
   useMap,
 } from 'react-leaflet';
-import { fetchMetros } from '../../api/fleet';
-import {
-  applyQuickCoords,
-  getAvailability,
-  getBubbleColor,
-} from '../../lib/fleetData';
+import { loadFleetFromApi } from '../../api/fleet';
+import { getAvailability, getBubbleColor } from '../../lib/fleetData';
 import MapLegend from './MapLegend';
 
 const DEFAULT_CENTER = [20, 0];
 const DEFAULT_ZOOM = 2;
+/** Overview click / overview popup zoom */
 const DETAIL_ZOOM = 5;
+/** Single metro / city search — closer in as requested */
+const METRO_ZOOM = 11;
+const STATE_ZOOM = 8;
+const COUNTRY_ZOOM = 5;
 const MAX_BOUNDS = [
   [-85, -180],
   [85, 180],
@@ -76,15 +77,58 @@ function FocusMetro({ metro, focusKey }) {
     if (!metro || !Number.isFinite(metro.lat) || !Number.isFinite(metro.lng)) {
       return;
     }
-    map.setView([metro.lat, metro.lng], Math.max(map.getZoom(), DETAIL_ZOOM), {
+    map.flyTo([metro.lat, metro.lng], METRO_ZOOM, {
       animate: true,
+      duration: 0.75,
     });
   }, [map, metro, focusKey]);
 
   return null;
 }
 
-function FitSearchBounds({ metros, searchActive }) {
+function FocusMapTarget({ target }) {
+  const map = useMap();
+  const focusKey = target?.key;
+
+  useEffect(() => {
+    if (!target || !Number.isFinite(target.lat) || !Number.isFinite(target.lng)) {
+      return;
+    }
+    const zoom = Number.isFinite(target.zoom) ? target.zoom : METRO_ZOOM;
+    map.flyTo([target.lat, target.lng], zoom, {
+      animate: true,
+      duration: 0.85,
+    });
+  }, [map, focusKey, target]);
+
+  return null;
+}
+
+function SearchFocusMarker({ target }) {
+  if (!target || !Number.isFinite(target.lat) || !Number.isFinite(target.lng)) {
+    return null;
+  }
+
+  return (
+    <CircleMarker
+      center={[target.lat, target.lng]}
+      radius={9}
+      pathOptions={{
+        fillColor: '#2c3e50',
+        color: '#7bc9d7',
+        weight: 3,
+        opacity: 1,
+        fillOpacity: 0.85,
+      }}
+    >
+      <Tooltip className="fleet-map-tooltip" direction="top" opacity={1}>
+        <strong>{target.label || 'Search result'}</strong>
+      </Tooltip>
+    </CircleMarker>
+  );
+}
+
+function FitSearchBounds({ metros, searchActive, fitKey, maxZoom = METRO_ZOOM }) {
   const map = useMap();
 
   useEffect(() => {
@@ -93,9 +137,7 @@ function FitSearchBounds({ metros, searchActive }) {
     if (metros.length === 1) {
       const m = metros[0];
       if (Number.isFinite(m.lat) && Number.isFinite(m.lng)) {
-        map.setView([m.lat, m.lng], Math.max(map.getZoom(), DETAIL_ZOOM), {
-          animate: true,
-        });
+        map.flyTo([m.lat, m.lng], maxZoom, { animate: true, duration: 0.75 });
       }
       return;
     }
@@ -106,11 +148,11 @@ function FitSearchBounds({ metros, searchActive }) {
     if (!bounds.length) return;
 
     map.fitBounds(bounds, {
-      padding: [40, 40],
-      maxZoom: metros.length <= 5 ? 7 : 5,
+      padding: [56, 56],
+      maxZoom,
       animate: true,
     });
-  }, [map, metros, searchActive]);
+  }, [map, metros, searchActive, fitKey, maxZoom]);
 
   return null;
 }
@@ -241,7 +283,7 @@ function OverviewMetroMarker({ metro }) {
   );
 }
 
-function ExplorerMetroMarker({ metro, onSelect, isDimmed }) {
+function ExplorerMetroMarker({ metro, onSelect }) {
   const colors = getBubbleColor(metro.scanners);
 
   return (
@@ -252,8 +294,8 @@ function ExplorerMetroMarker({ metro, onSelect, isDimmed }) {
         fillColor: colors.fill,
         color: colors.border,
         weight: 2,
-        opacity: isDimmed ? 0.2 : 0.95,
-        fillOpacity: isDimmed ? 0.12 : 0.55,
+        opacity: 0.95,
+        fillOpacity: 0.55,
       }}
       eventHandlers={
         onSelect
@@ -278,12 +320,7 @@ function ExplorerMetroMarker({ metro, onSelect, isDimmed }) {
   );
 }
 
-function MetroMarkers({
-  metros,
-  mode = 'overview',
-  onSelect,
-  dimmedKeys = null,
-}) {
+function MetroMarkers({ metros, mode = 'overview', onSelect }) {
   return metros.map((metro) => {
     if (!Number.isFinite(metro.lat) || !Number.isFinite(metro.lng)) return null;
 
@@ -293,16 +330,8 @@ function MetroMarkers({
       return <OverviewMetroMarker key={key} metro={metro} />;
     }
 
-    const isDimmed =
-      dimmedKeys instanceof Set && !dimmedKeys.has(metro.metroKey);
-
     return (
-      <ExplorerMetroMarker
-        key={key}
-        metro={metro}
-        onSelect={onSelect}
-        isDimmed={isDimmed}
-      />
+      <ExplorerMetroMarker key={key} metro={metro} onSelect={onSelect} />
     );
   });
 }
@@ -323,7 +352,7 @@ function MapError() {
       <p>
         Unable to load fleet map data from the API. Confirm the backend is
         running on <code>http://localhost:4000</code> and{' '}
-        <code>/api/metros</code> responds.
+        <code>/api/stores</code> responds.
       </p>
     </div>
   );
@@ -359,16 +388,10 @@ export function FleetOverviewMap({ onStats, filters = {} }) {
       if (filters.version) params.version = filters.version;
       if (filters.status) params.status = filters.status;
 
-      fetchMetros(params)
-        .then((rows) => {
-          if (!Array.isArray(rows)) {
-            throw new Error('Invalid /api/metros response');
-          }
-          return applyQuickCoords(rows);
-        })
-        .then((placed) => {
+      loadFleetFromApi(params)
+        .then((data) => {
           if (cancelled) return;
-          setMetros(placed);
+          setMetros(data.metros);
         })
         .catch((err) => {
           if (!cancelled) {
@@ -465,12 +488,13 @@ export function FleetOverviewMap({ onStats, filters = {} }) {
 
 export function ExplorerMap({
   metros,
-  allMetros,
   loading,
   error,
   selectedMetro,
   onSelect,
-  searchQuery = '',
+  searchActive = false,
+  mapFocus = null,
+  searchScope = null,
   drawerOpen = false,
 }) {
   const focusKey = useMemo(
@@ -481,24 +505,18 @@ export function ExplorerMap({
     [selectedMetro]
   );
 
-  const q = searchQuery.trim().toLowerCase();
-  const matchingMetros = useMemo(() => {
-    if (!q) return allMetros || metros;
-    return (allMetros || metros).filter(
-      (m) =>
-        m.metro.toLowerCase().includes(q) ||
-        (m.city || '').toLowerCase().includes(q) ||
-        (m.state || '').toLowerCase().includes(q) ||
-        m.country.toLowerCase().includes(q)
-    );
-  }, [allMetros, metros, q]);
+  const mapFocusKey = mapFocus
+    ? mapFocus.key || `${mapFocus.lat},${mapFocus.lng},${mapFocus.label}`
+    : '';
 
-  const dimmedKeys = useMemo(() => {
-    if (!q) return null;
-    return new Set(matchingMetros.map((m) => m.metroKey));
-  }, [matchingMetros, q]);
-
-  const markersSource = allMetros || metros;
+  const fitMaxZoom =
+    searchScope === 'country'
+      ? COUNTRY_ZOOM
+      : searchScope === 'state'
+        ? STATE_ZOOM
+        : searchScope === 'zip' || searchScope === 'address'
+          ? 14
+          : METRO_ZOOM;
 
   if (loading) {
     return (
@@ -540,21 +558,27 @@ export function ExplorerMap({
             maxZoom={19}
             noWrap
           />
-          {/* Only fit world before any metro has been focused — closing the
-              drawer must not remount FitWorld and zoom back out. */}
-          {!q && !selectedMetro && <FitWorld mode="explorer" />}
-          <FocusMetro metro={selectedMetro} focusKey={focusKey} />
-          <FitSearchBounds
-            metros={matchingMetros}
-            searchActive={Boolean(q) && !selectedMetro}
-          />
+          {!searchActive && !selectedMetro && !mapFocus && (
+            <FitWorld mode="explorer" />
+          )}
+          {mapFocus ? (
+            <>
+              <FocusMapTarget target={{ ...mapFocus, key: mapFocusKey }} />
+              <SearchFocusMarker target={mapFocus} />
+            </>
+          ) : (
+            <>
+              <FocusMetro metro={selectedMetro} focusKey={focusKey} />
+              <FitSearchBounds
+                metros={metros}
+                searchActive={searchActive && metros.length > 0 && !selectedMetro}
+                fitKey={`${searchScope || ''}|${metros.length}|${metros[0]?.metroKey || ''}`}
+                maxZoom={fitMaxZoom}
+              />
+            </>
+          )}
           <InvalidateOnDrawer drawerOpen={drawerOpen} />
-          <MetroMarkers
-            metros={markersSource}
-            mode="explorer"
-            onSelect={onSelect}
-            dimmedKeys={dimmedKeys}
-          />
+          <MetroMarkers metros={metros} mode="explorer" onSelect={onSelect} />
         </MapContainer>
       </div>
     </div>

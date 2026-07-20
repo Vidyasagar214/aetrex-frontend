@@ -3,7 +3,7 @@
  * (seed / state / country centroids). Map data comes from Aetrex-backend via src/api/fleet.js.
  */
 
-const GEO_CACHE_KEY = 'aetrex-metro-geocodes-v7';
+const GEO_CACHE_KEY = 'aetrex-metro-geocodes-v9';
 const BUBBLE_COLORS = {
   green: { fill: '#5cb85c', border: '#3d8b3d' },
   yellow: { fill: '#f0ad4e', border: '#d58512' },
@@ -176,6 +176,38 @@ const US_STATE_ALIASES = {
   tennessee: 'Tennessee',
 };
 
+/** Australia — scoped separately so WA ≠ Washington, VIC ≠ nothing US */
+const AU_STATE_ALIASES = {
+  nsw: 'New South Wales',
+  'new south wales': 'New South Wales',
+  'nsw (new south wales)': 'New South Wales',
+  qld: 'Queensland',
+  queensland: 'Queensland',
+  vic: 'Victoria',
+  victoria: 'Victoria',
+  'vic (victoria)': 'Victoria',
+  wa: 'Western Australia',
+  'western australia': 'Western Australia',
+  sa: 'South Australia',
+  'south australia': 'South Australia',
+  tas: 'Tasmania',
+  tasmania: 'Tasmania',
+  act: 'Australian Capital Territory',
+  'australian capital territory': 'Australian Capital Territory',
+  nt: 'Northern Territory',
+  'northern territory': 'Northern Territory',
+  // Dirty store rows sometimes put city names in State
+  sydney: 'New South Wales',
+  melbourne: 'Victoria',
+  brisbane: 'Queensland',
+  perth: 'Western Australia',
+  adelaide: 'South Australia',
+  hobart: 'Tasmania',
+  canberra: 'Australian Capital Territory',
+  'port kennedy': 'Western Australia',
+  'jindabyne nsw': 'New South Wales',
+};
+
 // Verified city coordinates used before any online geocoder
 const CITY_COORDS = {
   'bengaluru|india': { lat: 12.9768, lng: 77.5901 },
@@ -234,6 +266,66 @@ const CITY_COORDS = {
   'pulaski|tennessee|united states': { lat: 35.1998, lng: -87.0308 },
   'madison|tn|united states': { lat: 36.2561, lng: -86.685 },
   'madison|tennessee|united states': { lat: 36.2561, lng: -86.685 },
+  // Australia — major metros / suburb clusters from fleet data
+  'sydney|australia': { lat: -33.8688, lng: 151.2093 },
+  'sydney|new south wales|australia': { lat: -33.8688, lng: 151.2093 },
+  'sydney|nsw|australia': { lat: -33.8688, lng: 151.2093 },
+  'alexandria|nsw|australia': { lat: -33.901, lng: 151.198 },
+  'alexandria|new south wales|australia': { lat: -33.901, lng: 151.198 },
+  'marrickville|nsw|australia': { lat: -33.911, lng: 151.155 },
+  'marrickville|new south wales|australia': { lat: -33.911, lng: 151.155 },
+  'marrickville|queensland|australia': { lat: -27.555, lng: 153.05 },
+  'marrickville|qld|australia': { lat: -27.555, lng: 153.05 },
+  'penrith|new south wales|australia': { lat: -33.75, lng: 150.694 },
+  'penrith|nsw|australia': { lat: -33.75, lng: 150.694 },
+  'corrimal|nsw|australia': { lat: -34.372, lng: 150.906 },
+  'lake haven|nsw|australia': { lat: -33.24, lng: 151.51 },
+  'eastern creek|nsw|australia': { lat: -33.818, lng: 150.855 },
+  'eastern creek|new south wales|australia': { lat: -33.818, lng: 150.855 },
+  'marsden park|nsw|australia': { lat: -33.697, lng: 150.835 },
+  'marsden park|sydney|australia': { lat: -33.697, lng: 150.835 },
+  'marsden park|australia': { lat: -33.697, lng: 150.835 },
+  'jindabyne|nsw|australia': { lat: -36.415, lng: 148.62 },
+  'jindabyne nsw|australia': { lat: -36.415, lng: 148.62 },
+  'melbourne|australia': { lat: -37.8136, lng: 144.9631 },
+  'melbourne|victoria|australia': { lat: -37.8136, lng: 144.9631 },
+  'melbourne|vic|australia': { lat: -37.8136, lng: 144.9631 },
+  'docklands|victoria|australia': { lat: -37.815, lng: 144.946 },
+  'docklands|australia': { lat: -37.815, lng: 144.946 },
+  'epping|victoria|australia': { lat: -37.649, lng: 145.025 },
+  'mill park|victoria|australia': { lat: -37.663, lng: 145.061 },
+  'greensbrough|vic|australia': { lat: -37.704, lng: 145.103 },
+  'greensborough|vic|australia': { lat: -37.704, lng: 145.103 },
+  'kilsyth|victoria|australia': { lat: -37.8, lng: 145.316 },
+  'kilsyth|vic|australia': { lat: -37.8, lng: 145.316 },
+  'malvern east|victoria|australia': { lat: -37.874, lng: 145.05 },
+  'malvern east|vic|australia': { lat: -37.874, lng: 145.05 },
+  'oakleigh south|victoria|australia': { lat: -37.924, lng: 145.105 },
+  'oakleigh south|australia': { lat: -37.924, lng: 145.105 },
+  'brisbane|australia': { lat: -27.4698, lng: 153.0251 },
+  'brisbane|queensland|australia': { lat: -27.4698, lng: 153.0251 },
+  'brisbane|qld|australia': { lat: -27.4698, lng: 153.0251 },
+  'coomera|queensland|australia': { lat: -27.872, lng: 153.333 },
+  'coomera|qld|australia': { lat: -27.872, lng: 153.333 },
+  'coomera|australia': { lat: -27.872, lng: 153.333 },
+  'browns plains|queensland|australia': { lat: -27.66, lng: 153.05 },
+  'browns plains|australia': { lat: -27.66, lng: 153.05 },
+  'hillcrest|queensland|australia': { lat: -27.67, lng: 153.03 },
+  'hillcrest|australia': { lat: -27.67, lng: 153.03 },
+  'perth|australia': { lat: -31.9505, lng: 115.8605 },
+  'perth|western australia|australia': { lat: -31.9505, lng: 115.8605 },
+  'perth|wa|australia': { lat: -31.9505, lng: 115.8605 },
+  'bibra lake|western australia|australia': { lat: -32.098, lng: 115.819 },
+  'bibra lake|australia': { lat: -32.098, lng: 115.819 },
+  'port kennedy|wa|australia': { lat: -32.37, lng: 115.75 },
+  'port kennedy|western australia|australia': { lat: -32.37, lng: 115.75 },
+  'port kennedy|australia': { lat: -32.37, lng: 115.75 },
+  'adelaide|australia': { lat: -34.9285, lng: 138.6007 },
+  'hobart|australia': { lat: -42.8821, lng: 147.3272 },
+  'hobart|tasmania|australia': { lat: -42.8821, lng: 147.3272 },
+  'burnie|tasmania|australia': { lat: -41.055, lng: 145.907 },
+  'moonah|tasmania|australia': { lat: -42.846, lng: 147.3 },
+  'canberra|australia': { lat: -35.2809, lng: 149.13 },
 };
 
 const PLACEHOLDER_CITY = /^(x+|xxx+|tbd|abc|oo|null|n\/?a|test|unknown)$/i;
@@ -308,6 +400,25 @@ const US_STATE_KEYS = new Set([
   'TN',
 ]);
 
+const AU_STATE_KEYS = new Set([
+  'New South Wales',
+  'NSW',
+  'Queensland',
+  'QLD',
+  'Victoria',
+  'VIC',
+  'Western Australia',
+  'WA',
+  'South Australia',
+  'SA',
+  'Tasmania',
+  'TAS',
+  'Australian Capital Territory',
+  'ACT',
+  'Northern Territory',
+  'NT',
+]);
+
 const STATE_CENTROIDS = {
   // India
   Karnataka: [15.3173, 75.7139],
@@ -375,6 +486,15 @@ const STATE_CENTROIDS = {
   OK: [35.4676, -97.5164],
   Tennessee: [35.5175, -86.5804],
   TN: [35.5175, -86.5804],
+  // Australia (full names only — avoid WA/VIC colliding with US keys)
+  'New South Wales': [-32.0, 147.0],
+  Queensland: [-22.0, 145.0],
+  Victoria: [-37.0, 144.5],
+  'Western Australia': [-26.0, 121.0],
+  'South Australia': [-30.0, 135.0],
+  Tasmania: [-42.0, 147.0],
+  'Australian Capital Territory': [-35.3, 149.1],
+  'Northern Territory': [-19.0, 133.0],
 };
 
 function getBubbleColor(scanners) {
@@ -426,9 +546,12 @@ function normalizeStoreRow(row) {
   const hasAnyValue = Object.values(row || {}).some((v) => String(v || '').trim() !== '');
   if (!hasAnyValue) return null;
 
-  const city = String(row.City || '').trim() || 'Unknown';
-  const state = String(row.State || '').trim();
+  const rawCity = String(row.City || '').trim() || 'Unknown';
+  const rawState = String(row.State || '').trim();
   const country = String(row.Country || '').trim() || '—';
+  // Normalize before metroKey so Bangalore / Bengaluru / KORAMANGALA share one metro
+  const city = normalizeCityName(rawCity, rawState, country) || rawCity;
+  const state = normalizeStateName(rawState, city, country) || rawState;
   const metroKey = buildMetroKey(city, state, country);
   const status = deriveScannerStatus(row);
 
@@ -559,10 +682,13 @@ function normalizeStateName(state, city, country) {
     countryNorm === 'usa' ||
     countryNorm === 'us';
   const isIndia = countryNorm === 'india';
+  const isAustralia = countryNorm === 'australia' || countryNorm === 'au';
 
   // Country-scoped aliases — prevents US "TN" (Tennessee) mapping to Tamil Nadu
+  // and US "WA" (Washington) mapping to Western Australia
   if (isUs && US_STATE_ALIASES[lower]) return US_STATE_ALIASES[lower];
   if (isIndia && INDIA_STATE_ALIASES[lower]) return INDIA_STATE_ALIASES[lower];
+  if (isAustralia && AU_STATE_ALIASES[lower]) return AU_STATE_ALIASES[lower];
 
   if (isIndia) {
     if (/banglo|bengaluru|karnataka|^ka$|^kar$/.test(lower)) return 'Karnataka';
@@ -570,11 +696,23 @@ function normalizeStateName(state, city, country) {
     if (/uttarakhand|uttaranchal/.test(lower)) return 'Uttarakhand';
   }
 
+  if (isAustralia) {
+    if (/new south wales|^nsw\b/.test(lower)) return 'New South Wales';
+    if (/queensland|^qld\b/.test(lower)) return 'Queensland';
+    if (/victoria|^vic\b/.test(lower)) return 'Victoria';
+    if (/western australia|^wa\b/.test(lower)) return 'Western Australia';
+    if (/south australia|^sa\b/.test(lower)) return 'South Australia';
+    if (/tasmania|^tas\b/.test(lower)) return 'Tasmania';
+  }
+
   // Already a known full/abbrev name for that country
   if (isUs && (US_STATE_KEYS.has(raw) || US_STATE_KEYS.has(raw.toUpperCase()))) {
     return US_STATE_ALIASES[lower] || raw;
   }
   if (isIndia && INDIA_STATE_KEYS.has(raw)) return raw;
+  if (isAustralia && AU_STATE_KEYS.has(raw)) {
+    return AU_STATE_ALIASES[lower] || raw;
+  }
 
   return raw;
 }
@@ -614,10 +752,19 @@ function lookupSeedCoords(metro) {
   if (state) {
     keys.push(`${city}|${state}|${country}`);
     // Also try US postal abbreviation when we only have the full name (or vice versa)
-    const abbr = Object.entries(US_STATE_ALIASES).find(([, full]) => full.toLowerCase() === state)?.[0];
-    if (abbr) keys.push(`${city}|${abbr}|${country}`);
-    const full = US_STATE_ALIASES[state];
-    if (full) keys.push(`${city}|${full.toLowerCase()}|${country}`);
+    const usAbbr = Object.entries(US_STATE_ALIASES).find(
+      ([, full]) => full.toLowerCase() === state
+    )?.[0];
+    if (usAbbr) keys.push(`${city}|${usAbbr}|${country}`);
+    const usFull = US_STATE_ALIASES[state];
+    if (usFull) keys.push(`${city}|${usFull.toLowerCase()}|${country}`);
+
+    const auAbbr = Object.entries(AU_STATE_ALIASES).find(
+      ([, full]) => full.toLowerCase() === state
+    )?.[0];
+    if (auAbbr) keys.push(`${city}|${auAbbr}|${country}`);
+    const auFull = AU_STATE_ALIASES[state];
+    if (auFull) keys.push(`${city}|${auFull.toLowerCase()}|${country}`);
   }
   keys.push(`${city}|${country}`);
 
@@ -681,12 +828,20 @@ function applyStateFallback(metro) {
     countryNorm === 'usa' ||
     countryNorm === 'us';
   const isIndia = countryNorm === 'india';
+  const isAustralia = countryNorm === 'australia' || countryNorm === 'au';
 
   // Never place a US metro on an Indian state centroid (or vice versa)
   if (isUs && !US_STATE_KEYS.has(state) && !US_STATE_KEYS.has(state.toUpperCase())) {
     return null;
   }
   if (isIndia && !INDIA_STATE_KEYS.has(state)) {
+    return null;
+  }
+  if (
+    isAustralia &&
+    !AU_STATE_KEYS.has(state) &&
+    !AU_STATE_ALIASES[state.toLowerCase()]
+  ) {
     return null;
   }
 
@@ -753,6 +908,20 @@ function applyQuickCoords(metros) {
   return placed.filter((metro) => Number.isFinite(metro.lat) && Number.isFinite(metro.lng));
 }
 
+function getCountryCentroid(countryName) {
+  const raw = String(countryName || '').trim();
+  if (!raw) return null;
+  if (COUNTRY_CENTROIDS[raw]) {
+    const [lat, lng] = COUNTRY_CENTROIDS[raw];
+    return { lat, lng, label: raw, zoom: 5 };
+  }
+  const hit = Object.entries(COUNTRY_CENTROIDS).find(
+    ([name]) => name.toLowerCase() === raw.toLowerCase()
+  );
+  if (!hit) return null;
+  return { lat: hit[1][0], lng: hit[1][1], label: hit[0], zoom: 5 };
+}
+
 export {
   getBubbleColor,
   getAvailability,
@@ -760,5 +929,6 @@ export {
   normalizeStoreRow,
   buildFleetIndex,
   applyQuickCoords,
+  getCountryCentroid,
 };
 
