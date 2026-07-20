@@ -187,27 +187,49 @@ export function resolveCountryQuery(query, knownCountries = []) {
   return aliasHit || null;
 }
 
-function normalizeStateQuery(query) {
+/** All region interpretations of a state query (handles WA / SA ambiguity). */
+function resolveAllStateQueries(query) {
   const q = String(query || '')
     .trim()
     .toLowerCase();
-  if (!q) return null;
-  if (US_STATE_ALIASES[q]) return { name: US_STATE_ALIASES[q], region: 'us' };
-  if (INDIA_STATE_ALIASES[q]) return { name: INDIA_STATE_ALIASES[q], region: 'in' };
-  if (AU_STATE_ALIASES[q]) return { name: AU_STATE_ALIASES[q], region: 'au' };
+  if (!q) return [];
+
+  const out = [];
+  const push = (name, region) => {
+    if (!name) return;
+    if (!out.some((s) => s.name === name && s.region === region)) {
+      out.push({ name, region });
+    }
+  };
+
+  push(US_STATE_ALIASES[q], 'us');
+  push(INDIA_STATE_ALIASES[q], 'in');
+  push(AU_STATE_ALIASES[q], 'au');
 
   const usFull = Object.values(US_STATE_ALIASES).find((n) => n.toLowerCase() === q);
-  if (usFull) return { name: usFull, region: 'us' };
-
+  push(usFull, 'us');
   const inFull = Object.values(INDIA_STATE_ALIASES).find(
     (n) => n.toLowerCase() === q
   );
-  if (inFull) return { name: inFull, region: 'in' };
-
+  push(inFull, 'in');
   const auFull = Object.values(AU_STATE_ALIASES).find((n) => n.toLowerCase() === q);
-  if (auFull) return { name: auFull, region: 'au' };
+  push(auFull, 'au');
 
-  return null;
+  return out;
+}
+
+function normalizeStateQuery(query) {
+  const all = resolveAllStateQueries(query);
+  if (!all.length) return null;
+  // Prefer unambiguous full names; for abbreviations keep first but callers
+  // that need all regions should use resolveAllStateQueries / findMetrosByState.
+  if (all.length === 1) return all[0];
+  // Prefer full-name-only region when query equals a full state name
+  const q = String(query || '')
+    .trim()
+    .toLowerCase();
+  const fullHit = all.find((s) => s.name.toLowerCase() === q);
+  return fullHit || all[0];
 }
 
 function stateEquals(metroState, canonicalName) {
@@ -235,16 +257,7 @@ function countryEquals(metroCountry, canonical) {
   const resolvedTarget = (COUNTRY_ALIASES[target] || target).toLowerCase();
   if (resolvedCountry === resolvedTarget) return true;
 
-  if (resolvedCountry.length >= 5 && resolvedTarget.length >= 5) {
-    if (
-      resolvedCountry.startsWith(resolvedTarget) ||
-      resolvedTarget.startsWith(resolvedCountry) ||
-      resolvedCountry.includes(resolvedTarget) ||
-      resolvedTarget.includes(resolvedCountry)
-    ) {
-      return true;
-    }
-  }
+  // Avoid fuzzy matches that confuse near-names (Australia / Austria)
   return false;
 }
 
@@ -253,10 +266,14 @@ function enrichQuery(query) {
   if (isUsZip(q)) return `${q}, USA`;
   const country = resolveCountryQuery(q);
   if (country) return country;
-  const state = normalizeStateQuery(q);
-  if (state) {
-    return state.region === 'in' ? `${state.name}, India` : `${state.name}, USA`;
+  const states = resolveAllStateQueries(q);
+  if (states.length === 1) {
+    const state = states[0];
+    if (state.region === 'in') return `${state.name}, India`;
+    if (state.region === 'au') return `${state.name}, Australia`;
+    return `${state.name}, USA`;
   }
+  // Ambiguous abbrevs (WA, SA, …) — don't force USA; let Nominatim + scoring decide
   return q;
 }
 
@@ -341,10 +358,12 @@ async function geocodeWithNominatim(query, originalQuery, signal) {
     });
     if (isUsZip(originalQuery)) params.set('countrycodes', 'us');
 
-    const state = normalizeStateQuery(originalQuery);
-    if (state?.region === 'us') params.set('countrycodes', 'us');
-    if (state?.region === 'in') params.set('countrycodes', 'in');
-    if (state?.region === 'au') params.set('countrycodes', 'au');
+    const states = resolveAllStateQueries(originalQuery);
+    if (states.length === 1) {
+      if (states[0].region === 'us') params.set('countrycodes', 'us');
+      if (states[0].region === 'in') params.set('countrycodes', 'in');
+      if (states[0].region === 'au') params.set('countrycodes', 'au');
+    }
 
     const response = await fetchWithTimeout(
       `https://nominatim.openstreetmap.org/search?${params.toString()}`,
@@ -402,7 +421,8 @@ export function findMetroByZip(metros, scannersByMetro, query) {
     .trim()
     .replace(/\s+/g, '')
     .toLowerCase();
-  if (!q || q.length < 3) return null;
+  // Require a real zip-length query before matching (avoids short false positives)
+  if (!q || q.length < 4) return null;
 
   for (const metro of metros) {
     const scanners = scannersByMetro.get(metro.metroKey) || [];
@@ -411,7 +431,11 @@ export function findMetroByZip(metros, scannersByMetro, query) {
         .replace(/\s+/g, '')
         .toLowerCase();
       if (!zip) return false;
-      return zip === q || zip.startsWith(q) || q.startsWith(zip.slice(0, 5));
+      if (zip === q) return true;
+      if (q.length >= 5 && (zip.startsWith(q) || q.startsWith(zip.slice(0, 5)))) {
+        return true;
+      }
+      return false;
     });
     if (hit) return metro;
   }
@@ -436,9 +460,10 @@ export function findMetrosByCountry(metros, query) {
 }
 
 export function findMetrosByState(metros, query) {
-  const normalized = normalizeStateQuery(query);
-  if (normalized) {
-    return metros.filter((m) => stateEquals(m.state, normalized.name));
+  const states = resolveAllStateQueries(query);
+  if (states.length) {
+    const names = states.map((s) => s.name);
+    return metros.filter((m) => names.some((name) => stateEquals(m.state, name)));
   }
   const q = String(query || '')
     .trim()

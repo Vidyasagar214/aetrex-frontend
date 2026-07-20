@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   MapContainer,
@@ -8,7 +8,6 @@ import {
   Popup,
   useMap,
 } from 'react-leaflet';
-import { loadFleetFromApi } from '../../api/fleet';
 import { getAvailability, getBubbleColor } from '../../lib/fleetData';
 import MapLegend from './MapLegend';
 
@@ -169,7 +168,7 @@ function InvalidateOnDrawer({ drawerOpen }) {
 }
 
 function explorerDeepLink(metro) {
-  const value = metro.metroKey || metro.city || metro.metro;
+  const value = metro.metroKey || metro.metro;
   return `/location-explorer?metro=${encodeURIComponent(value)}`;
 }
 
@@ -178,6 +177,7 @@ function OverviewMetroMarker({ metro }) {
   const map = useMap();
   const markerRef = useRef(null);
   const allowPopupRef = useRef(false);
+  const popupTimerRef = useRef(null);
   const availability = getAvailability(metro);
   const colors = getBubbleColor(metro.scanners);
 
@@ -195,6 +195,10 @@ function OverviewMetroMarker({ metro }) {
     }
 
     allowPopupRef.current = false;
+    if (popupTimerRef.current) {
+      clearTimeout(popupTimerRef.current);
+      popupTimerRef.current = null;
+    }
     if (typeof marker.closePopup === 'function') {
       marker.closePopup();
     }
@@ -215,8 +219,18 @@ function OverviewMetroMarker({ metro }) {
       duration: 0.65,
     });
 
-    map.once('moveend', openDetailPopup);
-    setTimeout(openDetailPopup, 700);
+    const onMoveEnd = () => {
+      if (popupTimerRef.current) {
+        clearTimeout(popupTimerRef.current);
+        popupTimerRef.current = null;
+      }
+      openDetailPopup();
+    };
+    map.once('moveend', onMoveEnd);
+    popupTimerRef.current = setTimeout(() => {
+      map.off('moveend', onMoveEnd);
+      openDetailPopup();
+    }, 700);
   };
 
   return (
@@ -350,72 +364,40 @@ function MapError() {
     <div className="fleet-map-error">
       <i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />
       <p>
-        Unable to load fleet map data from the API. Confirm the backend is
-        running on <code>http://localhost:4000</code> and{' '}
+        Unable to load fleet map data from the API. Confirm{' '}
+        <code>VITE_API_URL</code> points at the backend and{' '}
         <code>/api/stores</code> responds.
       </p>
     </div>
   );
 }
 
-export function FleetOverviewMap({ onStats, filters = {} }) {
-  const [metros, setMetros] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+export function FleetOverviewMap({
+  metros = [],
+  loading = false,
+  error = null,
+  onStats,
+  mapFocus = null,
+  searchScope = null,
+  searchActive = false,
+}) {
+  const mapFocusKey = mapFocus
+    ? mapFocus.key || `${mapFocus.lat},${mapFocus.lng},${mapFocus.label}`
+    : '';
 
-  const filterKey = useMemo(
-    () =>
-      JSON.stringify({
-        q: filters.q || '',
-        country: filters.country || '',
-        model: filters.model || '',
-        version: filters.version || '',
-        status: filters.status || '',
-      }),
-    [filters]
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      setLoading(true);
-      setError(null);
-
-      const params = {};
-      if (filters.q) params.q = filters.q;
-      if (filters.country) params.country = filters.country;
-      if (filters.model) params.model = filters.model;
-      if (filters.version) params.version = filters.version;
-      if (filters.status) params.status = filters.status;
-
-      loadFleetFromApi(params)
-        .then((data) => {
-          if (cancelled) return;
-          setMetros(data.metros);
-        })
-        .catch((err) => {
-          if (!cancelled) {
-            setError(err);
-            setMetros([]);
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    }, 200);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-    // filterKey captures all filter fields used above
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterKey]);
+  const fitMaxZoom =
+    searchScope === 'country'
+      ? COUNTRY_ZOOM
+      : searchScope === 'state'
+        ? STATE_ZOOM
+        : searchScope === 'zip' || searchScope === 'address'
+          ? 14
+          : METRO_ZOOM;
 
   useEffect(() => {
     if (!onStats) return;
     const countries = new Set(metros.map((m) => m.country));
-    const scanners = metros.reduce((sum, m) => sum + m.scanners, 0);
+    const scanners = metros.reduce((sum, m) => sum + (m.scanners || 0), 0);
     onStats({
       countries: countries.size,
       metros: metros.length,
@@ -442,12 +424,16 @@ export function FleetOverviewMap({ onStats, filters = {} }) {
     );
   }
 
-  if (!metros.length) {
+  if (!metros.length && !mapFocus) {
     return (
       <div className="fleet-map">
         <div className="fleet-map-error">
           <i className="fa-solid fa-map-location-dot" aria-hidden="true" />
-          <p>No metros match the current filters.</p>
+          <p>
+            {searchActive
+              ? 'No metros match the current search.'
+              : 'No metros match the current filters.'}
+          </p>
         </div>
         <MapLegend />
       </div>
@@ -477,7 +463,20 @@ export function FleetOverviewMap({ onStats, filters = {} }) {
             maxZoom={19}
             noWrap
           />
-          <FitWorld mode="overview" />
+          {!searchActive && !mapFocus && <FitWorld mode="overview" />}
+          {mapFocus ? (
+            <>
+              <FocusMapTarget target={{ ...mapFocus, key: mapFocusKey }} />
+              <SearchFocusMarker target={mapFocus} />
+            </>
+          ) : (
+            <FitSearchBounds
+              metros={metros}
+              searchActive={searchActive && metros.length > 0}
+              fitKey={`${searchScope || ''}|${metros.length}|${metros[0]?.metroKey || ''}`}
+              maxZoom={fitMaxZoom}
+            />
+          )}
           <MetroMarkers metros={metros} mode="overview" />
         </MapContainer>
       </div>

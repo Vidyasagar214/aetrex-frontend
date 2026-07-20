@@ -7,6 +7,8 @@ import ActivityList from '../components/ui/ActivityList';
 import { ModelChart, VersionChart } from '../components/charts/Charts';
 import { FleetOverviewMap } from '../components/maps/FleetMap';
 import { loadOverviewPage } from '../api/overview';
+import { useFleetData } from '../hooks/useFleetData';
+import { usePlaceSearch, sumScanners } from '../hooks/usePlaceSearch';
 
 const EMPTY_FILTERS = {
   countries: [],
@@ -35,7 +37,6 @@ const DEFAULT_KPIS = [
 ];
 
 export default function FleetOverview() {
-  const [search, setSearch] = useState('');
   const [country, setCountry] = useState('');
   const [model, setModel] = useState('');
   const [version, setVersion] = useState('');
@@ -53,23 +54,41 @@ export default function FleetOverview() {
   const [filterOptions, setFilterOptions] = useState(EMPTY_FILTERS);
   const [error, setError] = useState(null);
 
-  const queryParams = useMemo(
+  const dropdownParams = useMemo(
     () => ({
-      q: search.trim() || undefined,
       country: country || undefined,
       model: model || undefined,
       version: version || undefined,
       status: status || undefined,
     }),
-    [search, country, model, version, status]
+    [country, model, version, status]
   );
+
+  /** Map bubbles use the same API filters as KPIs so counts stay aligned. */
+  const { metros, scannersByMetro, loading: mapLoading, error: mapError } =
+    useFleetData(dropdownParams);
+
+  const {
+    search,
+    onSearchChange,
+    onSearchKeyDown,
+    visibleMetros,
+    mapFocus,
+    searchScope,
+    searchActive,
+    searching,
+    searchError,
+  } = usePlaceSearch({
+    metros,
+    scannersByMetro,
+  });
 
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
       setError(null);
 
-      loadOverviewPage(queryParams)
+      loadOverviewPage(dropdownParams)
         .then((page) => {
           if (cancelled) return;
           setKpis(
@@ -86,6 +105,9 @@ export default function FleetOverview() {
           if (!cancelled) {
             setError(err);
             setKpis(DEFAULT_KPIS);
+            setActivity([]);
+            setStale14d(0);
+            setCharts(EMPTY_CHARTS);
           }
         });
     }, 200);
@@ -94,24 +116,25 @@ export default function FleetOverview() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [queryParams]);
+  }, [dropdownParams]);
 
   const onStats = useCallback(
     (stats) => setMapStats((prev) => ({ ...prev, ...stats })),
     []
   );
 
-  const scannersInView = mapStats.scanners
-    ? mapStats.scanners.toLocaleString('en-US')
-    : (kpis[0]?.value && kpis[0].value !== '—'
-        ? kpis[0].value
-        : '—');
+  const scannersInView = useMemo(() => {
+    const total = sumScanners(visibleMetros);
+    return total ? total.toLocaleString('en-US') : '0';
+  }, [visibleMetros]);
 
   return (
     <main className="flex-1 p-5 lg:p-6 space-y-5">
       <FilterBar
+        searchPlaceholder="Search address, zip, city, state, country, or metro…"
         searchValue={search}
-        onSearchChange={setSearch}
+        onSearchChange={onSearchChange}
+        onSearchKeyDown={onSearchKeyDown}
         scannersInView={scannersInView}
         selects={[
           {
@@ -149,6 +172,15 @@ export default function FleetOverview() {
         ]}
       />
 
+      {(searching || searchError) && (
+        <p
+          className={`text-sm ${searchError ? 'text-red-600' : 'text-slate-500'}`}
+          role="status"
+        >
+          {searching ? 'Looking up location…' : searchError}
+        </p>
+      )}
+
       {error ? (
         <Card className="p-5 sm:p-6">
           <div className="py-6 text-center space-y-2">
@@ -156,9 +188,7 @@ export default function FleetOverview() {
               className="fa-solid fa-triangle-exclamation text-xl text-[var(--cp-danger,#d9534f)]"
               aria-hidden="true"
             />
-            <p className="text-sm">
-              Unable to load fleet overview..
-            </p>
+            <p className="text-sm">Unable to load fleet overview..</p>
             <p className="text-xs text-[var(--cp-text-muted,#888)]">
               {error.message || String(error)}
             </p>
@@ -178,7 +208,8 @@ export default function FleetOverview() {
             <div>
               <h2 className="cp-card-title">Global fleet distribution</h2>
               <p className="cp-card-subtitle">
-                Bubble = scanners per metro — click to explore the metro
+                Search place or filter · bubble = scanners per metro · detail
+                opens Location Explorer
               </p>
             </div>
             <Link to="/location-explorer" className="card-link shrink-0">
@@ -186,7 +217,15 @@ export default function FleetOverview() {
               <i className="fa-solid fa-arrow-right text-[10px]" />
             </Link>
           </div>
-          <FleetOverviewMap onStats={onStats} filters={queryParams} />
+          <FleetOverviewMap
+            metros={visibleMetros}
+            loading={mapLoading}
+            error={mapError}
+            onStats={onStats}
+            mapFocus={mapFocus}
+            searchScope={searchScope}
+            searchActive={searchActive}
+          />
         </Card>
 
         <Card className="chart-card p-5 sm:p-6 flex flex-col">
@@ -224,16 +263,34 @@ export default function FleetOverview() {
         <Card className="p-5 sm:p-6 flex flex-col">
           <h2 className="cp-card-title mb-1">Scanner activity status</h2>
           <p className="cp-card-subtitle mb-5">
-            Operational state of scanners in view
+            Operational state for the current filters
           </p>
           <ActivityList
             items={
               activity.length
                 ? activity
                 : [
-                    { label: 'Active', count: '—', pct: '', width: '0%', tone: 'active' },
-                    { label: 'Idle', count: '—', pct: '', width: '0%', tone: 'idle' },
-                    { label: 'Offline', count: '—', pct: '', width: '0%', tone: 'offline' },
+                    {
+                      label: 'Active',
+                      count: '—',
+                      pct: '',
+                      width: '0%',
+                      tone: 'active',
+                    },
+                    {
+                      label: 'Idle',
+                      count: '—',
+                      pct: '',
+                      width: '0%',
+                      tone: 'idle',
+                    },
+                    {
+                      label: 'Offline',
+                      count: '—',
+                      pct: '',
+                      width: '0%',
+                      tone: 'offline',
+                    },
                   ]
             }
           />

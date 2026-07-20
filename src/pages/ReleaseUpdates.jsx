@@ -117,6 +117,21 @@ export default function ReleaseUpdates() {
           if (!cancelled) {
             setError(err);
             setKpis(DEFAULT_KPIS);
+            setPipeline([]);
+            setAdoption({
+              labels: [],
+              adoption: [],
+              target: [],
+              currentPct: 0,
+              targetPct: 90,
+              releaseStart: null,
+              latestVersion: null,
+            });
+            setUnsupported([]);
+            setUnsupportedTotal(0);
+            setFailed(0);
+            setTopFailure('');
+            setScannersInView(0);
           }
         });
     }, 200);

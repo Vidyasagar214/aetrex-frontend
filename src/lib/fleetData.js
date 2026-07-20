@@ -3,7 +3,7 @@
  * (seed / state / country centroids). Map data comes from Aetrex-backend via src/api/fleet.js.
  */
 
-const GEO_CACHE_KEY = 'aetrex-metro-geocodes-v9';
+const GEO_CACHE_KEY = 'aetrex-metro-geocodes-v10';
 const BUBBLE_COLORS = {
   green: { fill: '#5cb85c', border: '#3d8b3d' },
   yellow: { fill: '#f0ad4e', border: '#d58512' },
@@ -19,6 +19,7 @@ const COUNTRY_CENTROIDS = {
   Denmark: [56.2639, 9.5018],
   Netherlands: [52.1326, 5.2913],
   'United Arab Emirates': [23.4241, 53.8478],
+  'Abu Dhabi': [24.4539, 54.3773],
   Indonesia: [-0.7893, 113.9213],
   Finland: [61.9241, 25.7482],
   Poland: [51.9194, 19.1451],
@@ -43,6 +44,7 @@ const COUNTRY_CENTROIDS = {
   Singapore: [1.3521, 103.8198],
   'South Africa': [-30.5595, 22.9375],
   'South Korea': [35.9078, 127.7669],
+  'Korea, Republic of': [35.9078, 127.7669],
   China: [35.8617, 104.1954],
   Turkey: [38.9637, 35.2433],
   Greece: [39.0742, 21.8243],
@@ -62,7 +64,9 @@ const COUNTRY_CENTROIDS = {
   Thailand: [15.87, 100.9925],
   Malaysia: [4.2105, 101.9758],
   Vietnam: [14.0583, 108.2772],
+  'Viet Nam': [14.0583, 108.2772],
   Taiwan: [23.6978, 120.9605],
+  'Taiwan, Province of China': [23.6978, 120.9605],
   'Hong Kong': [22.3193, 114.1694],
   Colombia: [4.5709, -74.2973],
   Chile: [-35.6751, -71.543],
@@ -73,6 +77,21 @@ const COUNTRY_CENTROIDS = {
   'Costa Rica': [9.7489, -83.7534],
   'Puerto Rico': [18.2208, -66.5901],
   Jamaica: [18.1096, -77.2975],
+  Barbados: [13.1939, -59.5432],
+  'Cayman Islands': [19.3133, -81.2546],
+  'Dominican Republic': [18.7357, -70.1627],
+  'El Salvador': [13.7942, -88.8965],
+  Guatemala: [15.7835, -90.2308],
+  Uruguay: [-32.5228, -55.7658],
+  Georgia: [42.3154, 43.3569],
+  Malawi: [-13.2543, 34.3015],
+  Maldives: [3.2028, 73.2207],
+  Mauritius: [-20.3484, 57.5522],
+  Oman: [21.4735, 55.9754],
+  'Palestinian Territory, Occupied': [31.9522, 35.2332],
+  Russia: [61.524, 105.3188],
+  'Russian Federation': [61.524, 105.3188],
+  Turkmenistan: [38.9697, 59.5563],
   Kuwait: [29.3117, 47.4818],
   Qatar: [25.3548, 51.1839],
   Bahrain: [26.0667, 50.5577],
@@ -85,13 +104,24 @@ const COUNTRY_CENTROIDS = {
   Kenya: [-0.0236, 37.9062],
   Kazakhstan: [48.0196, 66.9237],
   Ukraine: [48.3794, 31.1656],
-  Russia: [61.524, 105.3188],
   Belarus: [53.7098, 27.9534],
   Serbia: [44.0165, 21.0059],
   Bulgaria: [42.7339, 25.4858],
   Pakistan: [30.3753, 69.3451],
   Bangladesh: [23.685, 90.3563],
   'Sri Lanka': [7.8731, 80.7718],
+};
+
+/** Map dirty ISO / alternate country labels onto centroid keys */
+const COUNTRY_CENTROID_ALIASES = {
+  'korea, republic of': 'South Korea',
+  'viet nam': 'Vietnam',
+  'russian federation': 'Russia',
+  'taiwan, province of china': 'Taiwan',
+  'palestinian territory, occupied': 'Palestinian Territory, Occupied',
+  uae: 'United Arab Emirates',
+  usa: 'United States',
+  uk: 'United Kingdom',
 };
 
 const CITY_ALIASES = {
@@ -555,18 +585,19 @@ function normalizeStoreRow(row) {
   const metroKey = buildMetroKey(city, state, country);
   const status = deriveScannerStatus(row);
 
+  const storeId = String(row.StoreID || '').trim();
   const storeNic = String(row.StoreNIC || '').replace(/\s+/g, '');
   const deviceId = String(row.DeviceIDComputed || '').trim();
-  const serial =
-    deviceId ||
-    storeNic ||
-    (row.StoreID ? `STR-${String(row.StoreID).trim()}` : 'UNKNOWN');
+  // Match Devices page serial format: MODEL-StoreID
+  const serial = storeId
+    ? `${(deviceId && deviceId !== 'NULL' ? deviceId : storeNic || 'DEV').replace(/[^A-Za-z0-9]/g, '') || 'DEV'}-${storeId}`
+    : deviceId || storeNic || 'UNKNOWN';
 
   const version =
     String(row.SoftwareVersionComputed || row.iStepVerNumber || '—').trim() || '—';
 
   return {
-    storeId: String(row.StoreID || '').trim(),
+    storeId,
     serial,
     store: String(row.StoreName || '').trim() || 'Unknown store',
     metroKey,
@@ -858,8 +889,22 @@ function applyStateFallback(metro) {
 }
 
 function applyCountryFallback(metro) {
-  const centroid = COUNTRY_CENTROIDS[metro.country];
+  const raw = String(metro.country || '').trim();
+  if (!raw || raw === '—') return null;
+
+  let centroid = COUNTRY_CENTROIDS[raw];
+  if (!centroid) {
+    const alias = COUNTRY_CENTROID_ALIASES[raw.toLowerCase()];
+    if (alias) centroid = COUNTRY_CENTROIDS[alias];
+  }
+  if (!centroid) {
+    const hit = Object.entries(COUNTRY_CENTROIDS).find(
+      ([name]) => name.toLowerCase() === raw.toLowerCase()
+    );
+    if (hit) centroid = hit[1];
+  }
   if (!centroid) return null;
+
   const jittered = jitterFromKey(metro.metroKey, centroid[0], centroid[1], 1.2);
   return {
     lat: jittered.lat,
@@ -868,7 +913,17 @@ function applyCountryFallback(metro) {
   };
 }
 
-/** Instant placement: seed → cache → state approx → country approx (no network) */
+function applyUnknownFallback(metro) {
+  // Last resort so every metro stays searchable and counted on the map
+  const jittered = jitterFromKey(metro.metroKey, 15, 10, 12);
+  return {
+    lat: jittered.lat,
+    lng: normalizeLng(jittered.lng),
+    source: 'unknown-approx',
+  };
+}
+
+/** Instant placement: seed → cache → state approx → country approx → unknown */
 function applyQuickCoords(metros) {
   const cache = readGeoCache();
   let cacheDirty = false;
@@ -901,7 +956,7 @@ function applyQuickCoords(metros) {
       return { ...cleaned, ...countryApprox, _approximate: true };
     }
 
-    return cleaned;
+    return { ...cleaned, ...applyUnknownFallback(cleaned), _approximate: true };
   });
 
   if (cacheDirty) writeGeoCache(cache);
@@ -914,6 +969,11 @@ function getCountryCentroid(countryName) {
   if (COUNTRY_CENTROIDS[raw]) {
     const [lat, lng] = COUNTRY_CENTROIDS[raw];
     return { lat, lng, label: raw, zoom: 5 };
+  }
+  const alias = COUNTRY_CENTROID_ALIASES[raw.toLowerCase()];
+  if (alias && COUNTRY_CENTROIDS[alias]) {
+    const [lat, lng] = COUNTRY_CENTROIDS[alias];
+    return { lat, lng, label: alias, zoom: 5 };
   }
   const hit = Object.entries(COUNTRY_CENTROIDS).find(
     ([name]) => name.toLowerCase() === raw.toLowerCase()

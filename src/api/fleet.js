@@ -5,11 +5,6 @@ import {
   normalizeStoreRow,
 } from '../lib/fleetData';
 
-/** GET /api/metros — legacy aggregates (kept for callers; map uses store-built index) */
-export function fetchMetros(params = {}) {
-  return apiGet('/api/metros', params);
-}
-
 /** GET /api/stores — store/scanner rows (source of truth for metro counts) */
 function fetchStores(params = {}) {
   return apiGet('/api/stores', params);
