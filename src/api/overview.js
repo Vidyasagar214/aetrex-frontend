@@ -42,7 +42,7 @@ export async function loadOverviewPage(params = {}) {
     activity: activityPayload.items || [],
     stale14d: activityPayload.stale14d || 0,
     charts: charts || {
-      byModel: { labels: [], values: [], percents: [] },
+      byModel: { labels: [], codes: [], values: [], percents: [] },
       byVersion: { labels: [], values: [] },
     },
     filters: normalizeFilterOptions(filterOptions),

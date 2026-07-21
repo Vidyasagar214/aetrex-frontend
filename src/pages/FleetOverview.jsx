@@ -15,14 +15,14 @@ const EMPTY_FILTERS = {
   models: [],
   versions: [],
   statuses: [
-    { value: 'Active', label: 'Active' },
-    { value: 'Idle', label: 'Idle' },
-    { value: 'Offline', label: 'Offline' },
+    { value: 'active', label: 'Active' },
+    { value: 'idle', label: 'Idle' },
+    { value: 'offline', label: 'Offline' },
   ],
 };
 
 const EMPTY_CHARTS = {
-  byModel: { labels: [], values: [], percents: [] },
+  byModel: { labels: [], codes: [], values: [], percents: [] },
   byVersion: { labels: [], values: [] },
 };
 
@@ -35,39 +35,6 @@ const DEFAULT_KPIS = [
   { label: 'Unsupported', value: '—', meta: 'below v4.2 — action needed', metaTone: 'danger' },
   { label: 'Failed upgrades', value: '—', meta: 'need intervention', metaTone: 'danger' },
 ];
-
-/**
- * Dropdowns only show/hide metros. Bubble counts stay the full metro total
- * so "See Detailed View" matches Location Explorer.
- */
-function metroVisibleForFilters(metro, scannersByMetro, { country, model, version, status }) {
-  if (country && metro.country !== country) return false;
-  if (!model && !version && !status) return true;
-
-  const scanners = scannersByMetro.get(metro.metroKey) || [];
-  return scanners.some((s) => {
-    if (model) {
-      const code = String(s.deviceModel || '').trim().toUpperCase();
-      if (code !== String(model).trim().toUpperCase()) return false;
-    }
-    if (version) {
-      const ver = String(s.version || '').trim();
-      if (version === 'older') {
-        if (!ver || ver === '—' || ver === 'NULL') return true;
-        const major = Number.parseFloat(ver);
-        if (!Number.isFinite(major) || major >= 4.2) return false;
-      } else if (!ver.startsWith(String(version).replace(/^v/i, ''))) {
-        return false;
-      }
-    }
-    if (status) {
-      if (String(s.status || '').toLowerCase() !== String(status).toLowerCase()) {
-        return false;
-      }
-    }
-    return true;
-  });
-}
 
 export default function FleetOverview() {
   const [country, setCountry] = useState('');
@@ -97,22 +64,16 @@ export default function FleetOverview() {
     [country, model, version, status]
   );
 
-  // Same unfiltered fleet as Location Explorer — detail deep-links stay consistent
-  const { metros, scannersByMetro, loading: mapLoading, error: mapError } =
-    useFleetData();
+  // Debounce so map + KPIs/charts refresh together (avoids color/count flicker)
+  const [appliedFilters, setAppliedFilters] = useState(dropdownParams);
+  useEffect(() => {
+    const timer = setTimeout(() => setAppliedFilters(dropdownParams), 200);
+    return () => clearTimeout(timer);
+  }, [dropdownParams]);
 
-  const fleetMetros = useMemo(
-    () =>
-      metros.filter((m) =>
-        metroVisibleForFilters(m, scannersByMetro, {
-          country,
-          model,
-          version,
-          status,
-        })
-      ),
-    [metros, scannersByMetro, country, model, version, status]
-  );
+  // Same filter params as KPIs/charts so bubble colors + counts stay accurate
+  const { metros, scannersByMetro, loading: mapLoading, error: mapError } =
+    useFleetData(appliedFilters);
 
   const {
     search,
@@ -126,44 +87,41 @@ export default function FleetOverview() {
     searchError,
     clearPlaceSearch,
   } = usePlaceSearch({
-    metros: fleetMetros,
+    metros,
     scannersByMetro,
   });
 
   useEffect(() => {
     let cancelled = false;
-    const timer = setTimeout(() => {
-      setError(null);
+    setError(null);
 
-      loadOverviewPage(dropdownParams)
-        .then((page) => {
-          if (cancelled) return;
-          setKpis(
-            Array.isArray(page.kpis) && page.kpis.length
-              ? page.kpis
-              : DEFAULT_KPIS
-          );
-          setActivity(page.activity);
-          setStale14d(page.stale14d);
-          setCharts(page.charts || EMPTY_CHARTS);
-          setFilterOptions({ ...EMPTY_FILTERS, ...page.filters });
-        })
-        .catch((err) => {
-          if (!cancelled) {
-            setError(err);
-            setKpis(DEFAULT_KPIS);
-            setActivity([]);
-            setStale14d(0);
-            setCharts(EMPTY_CHARTS);
-          }
-        });
-    }, 200);
+    loadOverviewPage(appliedFilters)
+      .then((page) => {
+        if (cancelled) return;
+        setKpis(
+          Array.isArray(page.kpis) && page.kpis.length
+            ? page.kpis
+            : DEFAULT_KPIS
+        );
+        setActivity(page.activity);
+        setStale14d(page.stale14d);
+        setCharts(page.charts || EMPTY_CHARTS);
+        setFilterOptions({ ...EMPTY_FILTERS, ...page.filters });
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err);
+          setKpis(DEFAULT_KPIS);
+          setActivity([]);
+          setStale14d(0);
+          setCharts(EMPTY_CHARTS);
+        }
+      });
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
-  }, [dropdownParams]);
+  }, [appliedFilters]);
 
   const onStats = useCallback(
     (stats) => setMapStats((prev) => ({ ...prev, ...stats })),
@@ -286,6 +244,9 @@ export default function FleetOverview() {
               labels={charts.byModel?.labels}
               values={charts.byModel?.values}
               percents={charts.byModel?.percents}
+              codes={charts.byModel?.codes}
+              selectedModel={model}
+              modelOptions={filterOptions.models}
             />
           </div>
           <p className="model-footer">

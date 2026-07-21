@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import FilterBar from '../components/ui/FilterBar';
 import Card from '../components/ui/Card';
 import DevicesDataTable from '../components/ui/DevicesDataTable';
@@ -9,9 +9,9 @@ const EMPTY_OPTIONS = {
   models: [],
   versions: [],
   statuses: [
-    { value: 'Active', label: 'Active' },
-    { value: 'Idle', label: 'Idle' },
-    { value: 'Offline', label: 'Offline' },
+    { value: 'active', label: 'Active' },
+    { value: 'idle', label: 'Idle' },
+    { value: 'offline', label: 'Offline' },
   ],
 };
 
@@ -29,40 +29,50 @@ export default function Devices() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const queryParams = useMemo(
+    () => ({
+      q: filters.search.trim() || undefined,
+      country: filters.country || undefined,
+      model: filters.model || undefined,
+      version: filters.version || undefined,
+      status: filters.status || undefined,
+    }),
+    [filters]
+  );
+
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    const timer = setTimeout(() => {
+      setLoading(true);
+      setError(null);
 
-    loadDevicesPage()
-      .then((page) => {
-        if (cancelled) return;
-        setDevices(page.devices);
-        setOptions({ ...EMPTY_OPTIONS, ...page.filters });
-        setCount(page.devices.length);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err);
-          setDevices([]);
-          setCount(0);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      loadDevicesPage(queryParams)
+        .then((page) => {
+          if (cancelled) return;
+          setDevices(page.devices);
+          setOptions({ ...EMPTY_OPTIONS, ...page.filters });
+          setCount(page.meta?.total ?? page.devices.length);
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            setError(err);
+            setDevices([]);
+            setCount(0);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 200);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, []);
+  }, [queryParams]);
 
   const updateFilter = useCallback((key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
-  }, []);
-
-  const onFilteredCount = useCallback((n) => {
-    setCount(n);
   }, []);
 
   return (
@@ -70,9 +80,7 @@ export default function Devices() {
       <FilterBar
         searchValue={filters.search}
         onSearchChange={(value) => updateFilter('search', value)}
-        scannersInView={
-          loading ? '…' : count.toLocaleString('en-US')
-        }
+        scannersInView={loading ? '…' : count.toLocaleString('en-US')}
         selects={[
           {
             id: 'country',
@@ -129,11 +137,7 @@ export default function Devices() {
         ) : (
           <>
             <p className="cp-card-subtitle mb-4">Showing fleet scanners.</p>
-            <DevicesDataTable
-              devices={devices}
-              filters={filters}
-              onFilteredCount={onFilteredCount}
-            />
+            <DevicesDataTable devices={devices} filters={{ search: '' }} />
           </>
         )}
       </Card>

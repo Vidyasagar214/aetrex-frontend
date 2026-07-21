@@ -59,7 +59,20 @@ export default function DevicesDataTable({ devices, filters, onFilteredCount }) 
       ) {
         return false;
       }
-      if (!matchesFilter(f.version, row.dataset.version)) return false;
+      if (f.version) {
+        const ver = String(row.dataset.version || '').trim();
+        const needle = String(f.version).replace(/^v/i, '');
+        if (f.version === 'older') {
+          const major = Number.parseFloat(ver);
+          if (!ver || ver === '—' || ver === 'NULL') {
+            /* keep */
+          } else if (!Number.isFinite(major) || major >= 4.2) {
+            return false;
+          }
+        } else if (!ver.startsWith(needle)) {
+          return false;
+        }
+      }
       if (!matchesFilter(f.status, row.dataset.status)) return false;
 
       return true;
