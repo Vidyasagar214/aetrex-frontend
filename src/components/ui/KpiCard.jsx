@@ -12,7 +12,7 @@ export default function KpiCard({
   valueTone,
 }) {
   return (
-    <div className="cp-card kpi-card p-4">
+    <div className="cp-card kpi-card p-3 sm:p-4">
       <p className="kpi-label">{label}</p>
       <p className={`kpi-value${valueTone === 'danger' ? ' kpi-value-danger' : ''}`}>
         {value}

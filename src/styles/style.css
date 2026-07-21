@@ -227,7 +227,8 @@ body {
   z-index: 1100;
 }
 
-.page-header-bar h1 {
+.page-header-bar h1,
+.page-header-title {
   font-family: var(--cp-font-family);
   font-size: 22px;
   font-weight: var(--cp-fw-medium);
@@ -578,6 +579,48 @@ body {
     margin-left: 0;
     width: 100%;
     justify-content: space-between;
+  }
+
+  /* Header: full title, hide date */
+  .page-header-bar {
+    padding: 12px 14px;
+  }
+
+  .page-header-bar h1,
+  .page-header-title {
+    font-size: 17px;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    word-break: break-word;
+  }
+
+  .page-header-subtitle {
+    display: none;
+  }
+
+  .data-as-of {
+    display: none !important;
+  }
+
+  /* Card / KPI descriptions wrap too much on small screens */
+  .cp-card-subtitle,
+  .kpi-meta {
+    display: none !important;
+  }
+
+  .kpi-card {
+    padding: 12px;
+  }
+
+  .kpi-label {
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+
+  .kpi-value {
+    font-size: 22px;
+    margin-bottom: 0;
   }
 }
 

@@ -4,8 +4,8 @@ export default function Header({ title, subtitle, onToggleSidebar }) {
   const dataAsOf = useDataAsOf();
 
   return (
-    <header className="page-header-bar flex items-center justify-between gap-4">
-      <div className="flex items-center gap-3 min-w-0">
+    <header className="page-header-bar flex items-center justify-between gap-3 sm:gap-4">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
         <button
           type="button"
           onClick={onToggleSidebar}
@@ -14,13 +14,13 @@ export default function Header({ title, subtitle, onToggleSidebar }) {
         >
           <i className="fa-solid fa-bars text-sm" />
         </button>
-        <div className="min-w-0">
-          <h1 className="truncate">{title}</h1>
-          <p className="page-header-subtitle truncate">{subtitle}</p>
+        <div className="page-header-text min-w-0">
+          <h1 className="page-header-title">{title}</h1>
+          <p className="page-header-subtitle">{subtitle}</p>
         </div>
       </div>
       <div className="flex items-center gap-3 shrink-0">
-        <span className="data-as-of hidden sm:inline-flex">
+        <span className="data-as-of">
           <span className="data-as-of-dot" aria-hidden="true" />
           <span>{dataAsOf}</span>
         </span>
