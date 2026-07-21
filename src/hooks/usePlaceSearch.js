@@ -63,6 +63,18 @@ export function usePlaceSearch({ metros = [], scannersByMetro = new Map() } = {}
     setSearching(false);
   }, []);
 
+  /** Full reset used by the map Home control — clears query + isolation. */
+  const clearPlaceSearch = useCallback(() => {
+    clearTimeout(debounceRef.current);
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    searchSeqRef.current += 1;
+    setSearch('');
+    resetSearchUi();
+  }, [resetSearchUi]);
+
   const showFleetGroup = useCallback((list, scope) => {
     setMapFocus(null);
     setIsolatedMetros(list);
@@ -70,6 +82,40 @@ export function usePlaceSearch({ metros = [], scannersByMetro = new Map() } = {}
     setSearchError('');
   }, []);
 
+  /** Show every metro in a country (used after closing the metro drawer). */
+  const expandCountry = useCallback(
+    (countryName) => {
+      const country = String(countryName || '').trim();
+      if (!country || country === '—') {
+        clearPlaceSearch();
+        return [];
+      }
+
+      clearTimeout(debounceRef.current);
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
+      }
+      searchSeqRef.current += 1;
+
+      const list = metros.filter(
+        (m) => String(m.country || '').trim() === country
+      );
+      if (!list.length) {
+        clearPlaceSearch();
+        return [];
+      }
+
+      setSearch(country);
+      setSearching(false);
+      setSearchError('');
+      setMapFocus(null);
+      setIsolatedMetros(list);
+      setSearchScope('country');
+      return list;
+    },
+    [metros, clearPlaceSearch]
+  );
   const showSingleMetro = useCallback((metro) => {
     if (!metro) return;
     setMapFocus(null);
@@ -277,6 +323,8 @@ export function usePlaceSearch({ metros = [], scannersByMetro = new Map() } = {}
     searchError,
     isolatedMetros,
     resetSearchUi,
+    clearPlaceSearch,
+    expandCountry,
     isolateMetro,
     showSingleMetro,
   };

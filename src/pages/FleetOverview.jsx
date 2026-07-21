@@ -124,6 +124,7 @@ export default function FleetOverview() {
     searchActive,
     searching,
     searchError,
+    clearPlaceSearch,
   } = usePlaceSearch({
     metros: fleetMetros,
     scannersByMetro,
@@ -271,6 +272,7 @@ export default function FleetOverview() {
             mapFocus={mapFocus}
             searchScope={searchScope}
             searchActive={searchActive}
+            onHome={clearPlaceSearch}
           />
         </Card>
 

@@ -26,7 +26,8 @@ export default function LocationExplorer() {
     searching,
     searchError,
     isolateMetro,
-    resetSearchUi,
+    clearPlaceSearch,
+    expandCountry,
   } = usePlaceSearch({ metros, scannersByMetro });
 
   const totalScanners = useMemo(() => {
@@ -63,11 +64,23 @@ export default function LocationExplorer() {
   );
 
   const closeDrawer = useCallback(() => {
+    const country = selectedMetro?.country;
     setDrawerOpen(false);
     setSelectedMetro(null);
-    resetSearchUi();
     setSearchParams({}, { replace: true });
-  }, [setSearchParams, resetSearchUi]);
+    if (country) {
+      expandCountry(country);
+    } else {
+      clearPlaceSearch();
+    }
+  }, [selectedMetro, expandCountry, clearPlaceSearch, setSearchParams]);
+
+  const handleHome = useCallback(() => {
+    setDrawerOpen(false);
+    setSelectedMetro(null);
+    clearPlaceSearch();
+    setSearchParams({}, { replace: true });
+  }, [clearPlaceSearch, setSearchParams]);
 
   const onExplorerSearchKeyDown = useCallback(
     (e) => {
@@ -138,6 +151,7 @@ export default function LocationExplorer() {
             mapFocus={mapFocus}
             searchScope={searchScope}
             drawerOpen={drawerOpen}
+            onHome={handleHome}
           />
         </Card>
       </section>
